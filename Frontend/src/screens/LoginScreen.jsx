@@ -14,9 +14,11 @@ function LoginScreen({ onBack, onSignupClick, onLoginSuccess }) {
         if (!email.trim() || !password.trim()) { setError('All fields are required.'); return; }
         setError('');
         try {
-            await signInWithEmailAndPassword(auth, email, password);
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const loggedInUser = userCredential.user;
             alert('Login Successful!');
-            onLoginSuccess();
+            onLoginSuccess(loggedInUser); // Pass the user object to App.jsx
+
         } catch (err) {
             console.error(err);
             if (err.code === 'auth/user-not-found') setError('No account found. Please Sign Up first.');

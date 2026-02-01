@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const admin = require('firebase-admin');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 require('dotenv').config();
 
 admin.initializeApp();
@@ -13,12 +13,10 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Use gemini-2.0-flash-lite (confirmed available)
-const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-lite",
-});
+const modelName = "gemini-2.0-flash-lite";
 
 app.post('/analyzeMenu', async (req, res) => {
     try {
@@ -48,9 +46,12 @@ app.post('/analyzeMenu', async (req, res) => {
         Do not include markdown code blocks or any other text.`;
 
         console.log("Requesting Gemini API...");
-        const result = await model.generateContent([prompt, imagePart]);
-        const response = await result.response;
-        let text = response.text();
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: [prompt, imagePart]
+        });
+
+        let text = response.text;
 
         console.log("Raw AI Response:", text);
 

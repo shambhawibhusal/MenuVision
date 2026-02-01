@@ -67,7 +67,7 @@ function SignupScreen({ onBack, onSignupSuccess }) {
             await setDoc(doc(db, "users", user.uid), {
                 uid: user.uid, fullname: formData.fullname, email: formData.email, phone: formData.phone, createdAt: new Date()
             });
-            alert('Account Verified & Created!'); onSignupSuccess();
+            alert('Account Verified & Created!'); onSignupSuccess(user);
         } catch (err) {
             console.error(err); setLoading(false); alert('Verification Failed: ' + err.message);
         }

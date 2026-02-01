@@ -16,6 +16,19 @@ function Dashboard({ onLogout }) {
     const [selectedDish, setSelectedDish] = useState(null);
     const [searchText, setSearchText] = useState('');
 
+    // -- Search & Filter State
+    const [showFilters, setShowFilters] = useState(false);
+
+    // -- Chat State
+    const [chatMessages, setChatMessages] = useState([
+        { id: 1, text: "Hello! I am your Menu AI. Ask me about food.", sender: 'bot' }
+    ]);
+    const [chatInput, setChatInput] = useState('');
+
+    // -- Profile Edit State
+    const [showEditProfile, setShowEditProfile] = useState(false);
+    const [editData, setEditData] = useState({ fullname: '', phone: '', password: '' });
+
     // -- Camera Refs
     const videoRef = useRef(null);
     const canvasRef = useRef(null);

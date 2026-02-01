@@ -1,22 +1,20 @@
 require('dotenv').config();
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 async function listAllModels() {
     try {
-        console.log("Fetching available models...");
-        // Use the native listModels function
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
-        const data = await response.json();
+        console.log("Fetching available models using @google/genai...");
+        const response = await ai.models.list();
 
-        if (data.models) {
+        if (response && response.length > 0) {
             console.log("\nAvailable Model Names:");
-            data.models.forEach(m => {
+            response.forEach(m => {
                 console.log(m.name.replace("models/", ""));
             });
         } else {
-            console.log("No models found or error in response:", data);
+            console.log("No models found.");
         }
     } catch (error) {
         console.error("Error listing models:", error);
@@ -24,3 +22,4 @@ async function listAllModels() {
 }
 
 listAllModels();
+
