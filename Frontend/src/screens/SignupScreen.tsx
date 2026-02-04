@@ -12,14 +12,28 @@ import foodBackground from '../assets/food.png';
 import BackButton from '../components/BackButton';
 import { containerStyle } from '../utils/styles';
 
-function SignupScreen({ onBack, onSignupSuccess }) {
+import { User, ConfirmationResult } from 'firebase/auth';
+
+declare global {
+    interface Window {
+        recaptchaVerifier: RecaptchaVerifier;
+        confirmationResult: ConfirmationResult;
+    }
+}
+
+interface SignupScreenProps {
+    onBack: () => void;
+    onSignupSuccess: (user: User) => void;
+}
+
+const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) => {
     const [formData, setFormData] = useState({ email: '', fullname: '', phone: '', password: '', confirmPassword: '' });
     const [otp, setOtp] = useState('');
     const [error, setError] = useState('');
     const [showOtpPopup, setShowOtpPopup] = useState(false);
     const [loading, setLoading] = useState(false);
 
-    const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const handleSignupClick = async () => {
         const { email, fullname, phone, password, confirmPassword } = formData;
@@ -34,7 +48,7 @@ function SignupScreen({ onBack, onSignupSuccess }) {
             if (!window.recaptchaVerifier) {
                 window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
                     'size': 'invisible',
-                    'callback': (response) => { }
+                    'callback': () => { }
                 });
             }
             const formattedPhoneNumber = `+977${phone}`;
@@ -42,7 +56,7 @@ function SignupScreen({ onBack, onSignupSuccess }) {
             const confirmationResult = await signInWithPhoneNumber(auth, formattedPhoneNumber, appVerifier);
             window.confirmationResult = confirmationResult;
             setLoading(false); setShowOtpPopup(true); alert(`OTP sent to ${formattedPhoneNumber}`);
-        } catch (err) {
+        } catch (err: any) {
             console.error(err); setLoading(false);
             if (err.code === 'auth/invalid-phone-number') setError('Invalid phone format. Add country code (e.g., +91).');
             else setError(err.message);
@@ -59,7 +73,7 @@ function SignupScreen({ onBack, onSignupSuccess }) {
 
             try {
                 await linkWithCredential(user, credential);
-            } catch (linkError) {
+            } catch (linkError: any) {
                 if (linkError.code !== 'auth/provider-already-linked') throw linkError;
             }
 
@@ -68,7 +82,7 @@ function SignupScreen({ onBack, onSignupSuccess }) {
                 uid: user.uid, fullname: formData.fullname, email: formData.email, phone: formData.phone, createdAt: new Date()
             });
             alert('Account Verified & Created!'); onSignupSuccess(user);
-        } catch (err) {
+        } catch (err: any) {
             console.error(err); setLoading(false); alert('Verification Failed: ' + err.message);
         }
     };

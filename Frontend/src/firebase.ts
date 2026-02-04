@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getFunctions } from 'firebase/functions';
-import { getAnalytics } from "firebase/analytics";
+import { Analytics, getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDRDg8Yy03lP9YI7eey9F-3-H49kiEjLTs",
@@ -17,7 +17,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 
-let analytics;
+let analytics: Analytics | undefined;
 if (typeof window !== 'undefined') {
     analytics = getAnalytics(app);
 }

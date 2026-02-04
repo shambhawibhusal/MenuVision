@@ -5,7 +5,15 @@ import foodBackground from '../assets/food.png';
 import BackButton from '../components/BackButton';
 import { containerStyle } from '../utils/styles';
 
-function LoginScreen({ onBack, onSignupClick, onLoginSuccess }) {
+import { User } from 'firebase/auth';
+
+interface LoginScreenProps {
+    onBack: () => void;
+    onSignupClick: () => void;
+    onLoginSuccess: (user: User) => void;
+}
+
+const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLoginSuccess }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -17,9 +25,9 @@ function LoginScreen({ onBack, onSignupClick, onLoginSuccess }) {
             const userCredential = await signInWithEmailAndPassword(auth, email, password);
             const loggedInUser = userCredential.user;
             alert('Login Successful!');
-            onLoginSuccess(loggedInUser); // Pass the user object to App.jsx
+            onLoginSuccess(loggedInUser); // Pass the user object to App.tsx
 
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
             if (err.code === 'auth/user-not-found') setError('No account found. Please Sign Up first.');
             else if (err.code === 'auth/wrong-password') setError('Incorrect password.');

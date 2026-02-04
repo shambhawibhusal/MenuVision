@@ -3,21 +3,56 @@ import { auth } from '../firebase';
 import foodBackground from '../assets/food.png';
 import { containerStyle } from '../utils/styles';
 
-function Dashboard({ onLogout }) {
-    const [activeTab, setActiveTab] = useState('home');
+interface Dish {
+    id: number;
+    name: string;
+    place: string;
+    price: string;
+}
+
+interface ScannedItem {
+    name: string;
+    price: string;
+    calories?: string;
+    ingredients?: string;
+    description?: string;
+}
+
+interface HistoryItem {
+    id: number;
+    place: string;
+    date: string;
+    items: string;
+    total: string;
+}
+
+interface ChatMessage {
+    id: number;
+    text: string;
+    sender: 'user' | 'bot';
+}
+
+type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history';
+
+interface DashboardProps {
+    onLogout: () => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+    const [activeTab, setActiveTab] = useState<Tab>('home');
     const [showScanOptions, setShowScanOptions] = useState(false);
-    const [capturedImage, setCapturedImage] = useState(null);
+    const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
 
     const [historyView, setHistoryView] = useState('history');
 
-    const [historyItems, setHistoryItems] = useState([
+    const [historyItems, setHistoryItems] = useState<HistoryItem[]>([
         { id: 1, place: 'Burger House', date: '20 Dec 2025', items: '2x Chicken Burger, 1x Coke', total: 'Rs. 550' },
     ]);
 
-    const [favoriteItems, setFavoriteItems] = useState([]);
+    const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
 
-    const toggleRecommendedLike = (dish) => {
+    const toggleRecommendedLike = (dish: Dish) => {
         const isFav = favoriteItems.some(item => item.id === dish.id);
         if (isFav) {
             setFavoriteItems(favoriteItems.filter(item => item.id !== dish.id));
@@ -26,17 +61,17 @@ function Dashboard({ onLogout }) {
         }
     };
     // -- Data States
-    const [scannedItems, setScannedItems] = useState([]);
+    const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [fullText, setFullText] = useState('');
-    const [viewMode, setViewMode] = useState('items'); // 'items' or 'text'
-    const [selectedDish, setSelectedDish] = useState(null);
+    const [viewMode, setViewMode] = useState<'items' | 'text'>('items');
+    const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
     const [searchText, setSearchText] = useState('');
 
     // -- Search & Filter State
     const [showFilters, setShowFilters] = useState(false);
 
     // -- Chat State
-    const [chatMessages, setChatMessages] = useState([
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         { id: 1, text: "Hello! I am your Menu AI. Ask me about food.", sender: 'bot' }
     ]);
     const [chatInput, setChatInput] = useState('');
@@ -46,7 +81,7 @@ function Dashboard({ onLogout }) {
     const [editData, setEditData] = useState({ fullname: '', phone: '', password: '' });
 
     // -- Recommended Dishes Data
-    const [recommendedDishes] = useState([
+    const [recommendedDishes] = useState<Dish[]>([
         { id: 101, name: 'Spicy Ramen', place: 'Ichiraku Ramen', price: 'Rs. 450' },
         { id: 102, name: 'Cheese Pizza', place: 'Pizza Hut', price: 'Rs. 800' },
         { id: 103, name: 'Chicken MoMo', place: 'Everest MoMo', price: 'Rs. 250' },
@@ -57,8 +92,10 @@ function Dashboard({ onLogout }) {
     );
 
     // -- Camera Refs
-    const videoRef = useRef(null);
-    const canvasRef = useRef(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    const [isCameraOpen, setIsCameraOpen] = useState(false);
 
     // --- ANALYZE MENU (Prevents multiple requests via 'analyzing' state) ---
     const analyzeMenu = async () => {
@@ -89,7 +126,7 @@ function Dashboard({ onLogout }) {
             // Correctly handle if result.words is an array of objects [object Object]
             let extractedText = "";
             if (result.words && Array.isArray(result.words)) {
-                extractedText = result.words.map(w => {
+                extractedText = result.words.map((w: any) => {
                     if (typeof w === 'string') return w;
                     return w.text || w.word || JSON.stringify(w);
                 }).join(' ');
@@ -106,7 +143,7 @@ function Dashboard({ onLogout }) {
             } else {
                 alert("AI could not read the menu. Please try a clearer photo.");
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
             alert("Error: " + err.message);
         } finally {
@@ -134,34 +171,50 @@ function Dashboard({ onLogout }) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            setCapturedImage(canvas.toDataURL('image/png'));
-            stopCamera();
+            if (context) {
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                setCapturedImage(canvas.toDataURL('image/png'));
+                stopCamera();
+            }
         }
     };
 
     const stopCamera = () => {
         if (videoRef.current && videoRef.current.srcObject) {
-            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+            const stream = videoRef.current.srcObject as MediaStream;
+            stream.getTracks().forEach(track => track.stop());
             videoRef.current.srcObject = null;
         }
         setIsCameraOpen(false);
     };
 
-    const [isCameraOpen, setIsCameraOpen] = useState(false);
-
-    const handleFileChange = (event) => {
-        const file = event.target.files[0];
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
         if (file) {
             const reader = new FileReader();
-            reader.onloadend = () => { setCapturedImage(reader.result); setShowScanOptions(false); };
+            reader.onloadend = () => {
+                const result = reader.result;
+                if (typeof result === 'string') {
+                    setCapturedImage(result);
+                }
+                setShowScanOptions(false);
+            };
             reader.readAsDataURL(file);
         }
     };
 
+    const sendMessage = () => {
+        if (!chatInput.trim()) return;
+        setChatMessages([...chatMessages, { id: Date.now(), text: chatInput, sender: 'user' }]);
+        setChatInput('');
 
+        setTimeout(() => {
+            setChatMessages(prev => [...prev, { id: Date.now() + 1, text: "I can help you choose dishes 🍽️", sender: 'bot' }]);
+        }, 800);
+    };
     // --- UI Render ---
     const renderContent = () => {
+
         if (activeTab === 'results') {
             return (
                 <div style={{ padding: '20px' }}>
@@ -268,15 +321,7 @@ function Dashboard({ onLogout }) {
                 </div>
             );
         }
-        const sendMessage = () => {
-            if (!chatInput.trim()) return;
-            setChatMessages([...chatMessages, { id: Date.now(), text: chatInput, sender: 'user' }]);
-            setChatInput('');
 
-            setTimeout(() => {
-                setChatMessages(prev => [...prev, { id: Date.now() + 1, text: "I can help you choose dishes 🍽️", sender: 'bot' }]);
-            }, 800);
-        };
 
         if (activeTab === 'profile') {
             const user = auth.currentUser;
@@ -314,7 +359,13 @@ function Dashboard({ onLogout }) {
 
     };
 
-    const NavIcon = ({ name, label, path }) => (
+    interface NavIconProps {
+        name: Tab;
+        label: string;
+        path: React.ReactNode;
+    }
+
+    const NavIcon: React.FC<NavIconProps> = ({ name, label, path }) => (
         <div onClick={() => setActiveTab(name)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', color: activeTab === name ? '#3b82f6' : 'gray' }}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">{path}</svg>
             <span style={{ fontSize: '11px' }}>{label}</span>

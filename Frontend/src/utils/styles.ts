@@ -1,4 +1,6 @@
-export const containerStyle = {
+import { CSSProperties } from 'react';
+
+export const containerStyle: CSSProperties = {
     position: 'relative',
     width: '100%',
     maxWidth: '480px',

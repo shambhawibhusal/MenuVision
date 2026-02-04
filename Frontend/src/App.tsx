@@ -4,14 +4,17 @@ import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
 import Dashboard from './screens/Dashboard';
+import { User } from 'firebase/auth';
+
+type Screen = 'splash' | 'login' | 'signup' | 'dashboard';
 
 export default function App() {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [currentScreen, setCurrentScreen] = useState('splash');
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState<boolean>(true);
+    const [currentScreen, setCurrentScreen] = useState<Screen>('splash');
 
     useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged((currentUser) => {
+        const unsubscribe = auth.onAuthStateChanged((currentUser: User | null) => {
             setUser(currentUser);
             setLoading(false);
 
@@ -31,18 +34,18 @@ export default function App() {
                 <LoginScreen
                     onBack={() => setCurrentScreen('splash')}
                     onSignupClick={() => setCurrentScreen('signup')}
-                    onLoginSuccess={(loggedInUser) => {
+                    onLoginSuccess={(loggedInUser: User) => {
                         setUser(loggedInUser);
-                        setCurrentScreen('dashboard'); // go to Dashboard immediately
+                        setCurrentScreen('dashboard');
                     }}
                 />
             )}
             {currentScreen === 'signup' && (
                 <SignupScreen
                     onBack={() => setCurrentScreen('splash')}
-                    onSignupSuccess={(loggedInUser) => {
+                    onSignupSuccess={(loggedInUser: User) => {
                         setUser(loggedInUser);
-                        setCurrentScreen('dashboard'); // go to Dashboard immediately
+                        setCurrentScreen('dashboard');
                     }}
                 />
             )}

@@ -2,7 +2,11 @@ import React from 'react';
 import foodBackground from '../assets/food.png';
 import { containerStyle } from '../utils/styles';
 
-function SplashScreen({ onGetStarted }) {
+interface SplashScreenProps {
+    onGetStarted: () => void;
+}
+
+const SplashScreen: React.FC<SplashScreenProps> = ({ onGetStarted }) => {
     return (
         <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d1d5db' }}>
             <style>
