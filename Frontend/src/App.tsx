@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { auth } from './firebase';
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -18,8 +18,14 @@ export default function App() {
             setUser(currentUser);
             setLoading(false);
 
-            if (currentUser && currentScreen === 'splash') {
-                setCurrentScreen('dashboard');
+            if (currentUser) {
+                if (currentScreen === 'splash' || currentScreen === 'login' || currentScreen === 'signup') {
+                    setCurrentScreen('dashboard');
+                }
+            } else {
+                if (currentScreen === 'dashboard') {
+                    setCurrentScreen('login');
+                }
             }
         });
         return () => unsubscribe();

@@ -2,37 +2,31 @@ import React, { useState, useRef } from 'react';
 import { auth } from '../firebase';
 import foodBackground from '../assets/food.png';
 import { containerStyle } from '../utils/styles';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { Label } from "@/components/ui/label";
+import { Camera, History, User, MessageSquare, Home, Edit, X } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
-interface Dish {
-    id: number;
-    name: string;
-    place: string;
-    price: string;
-}
+// Types
+import { Dish, ScannedItem, HistoryItem, ChatMessage, Tab } from '@/types/dashboard';
 
-interface ScannedItem {
-    name: string;
-    price: string;
-    calories?: string;
-    ingredients?: string;
-    description?: string;
-}
-
-interface HistoryItem {
-    id: number;
-    place: string;
-    date: string;
-    items: string;
-    total: string;
-}
-
-interface ChatMessage {
-    id: number;
-    text: string;
-    sender: 'user' | 'bot';
-}
-
-type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history';
+// Components
+import HomeTab from '@/components/dashboard/HomeTab';
+import ResultsTab from '@/components/dashboard/ResultsTab';
+import ChatTab from '@/components/dashboard/ChatTab';
+import ProfileTab from '@/components/dashboard/ProfileTab';
+import HistoryTab from '@/components/dashboard/HistoryTab';
+import NavIcon from '@/components/dashboard/NavIcon';
 
 interface DashboardProps {
     onLogout: () => void;
@@ -44,9 +38,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
 
-    const [historyView, setHistoryView] = useState('history');
-
-    const [historyItems, setHistoryItems] = useState<HistoryItem[]>([
+    const [historyItems] = useState<HistoryItem[]>([
         { id: 1, place: 'Burger House', date: '20 Dec 2025', items: '2x Chicken Burger, 1x Coke', total: 'Rs. 550' },
     ]);
 
@@ -67,9 +59,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
     const [searchText, setSearchText] = useState('');
 
-    // -- Search & Filter State
-    const [showFilters, setShowFilters] = useState(false);
-
     // -- Chat State
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         { id: 1, text: "Hello! I am your Menu AI. Ask me about food.", sender: 'bot' }
@@ -78,7 +67,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     // -- Profile Edit State
     const [showEditProfile, setShowEditProfile] = useState(false);
-    const [editData, setEditData] = useState({ fullname: '', phone: '', password: '' });
 
     // -- Recommended Dishes Data
     const [recommendedDishes] = useState<Dish[]>([
@@ -97,13 +85,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const [isCameraOpen, setIsCameraOpen] = useState(false);
 
-    // --- ANALYZE MENU (Prevents multiple requests via 'analyzing' state) ---
+    // --- ANALYZE MENU ---
     const analyzeMenu = async () => {
         if (!capturedImage || analyzing) return;
 
         setAnalyzing(true);
         try {
-            // Convert data URL to Blob for FormData
             const responseBlob = await fetch(capturedImage);
             const blob = await responseBlob.blob();
 
@@ -123,7 +110,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             const result = await response.json();
             console.log("OCR result:", result);
 
-            // Correctly handle if result.words is an array of objects [object Object]
             let extractedText = "";
             if (result.words && Array.isArray(result.words)) {
                 extractedText = result.words.map((w: any) => {
@@ -212,218 +198,209 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             setChatMessages(prev => [...prev, { id: Date.now() + 1, text: "I can help you choose dishes 🍽️", sender: 'bot' }]);
         }, 800);
     };
-    // --- UI Render ---
-    const renderContent = () => {
-        if (activeTab === 'results') {
-            return (
-                <div className="p-5">
-                    <h2 className="text-2xl font-bold text-white">Analysis Results</h2>
-
-                    <div className="flex gap-[10px] mt-[15px] mb-[15px]">
-                        <button
-                            onClick={() => setViewMode('items')}
-                            className={`flex-1 p-[10px] rounded-lg border-none font-bold ${viewMode === 'items' ? 'bg-amber-400 text-black' : 'bg-[#444] text-white'}`}
-                        >
-                            Menu Items
-                        </button>
-                        <button
-                            onClick={() => setViewMode('text')}
-                            className={`flex-1 p-[10px] rounded-lg border-none font-bold ${viewMode === 'text' ? 'bg-amber-400 text-black' : 'bg-[#444] text-white'}`}
-                        >
-                            Full Text
-                        </button>
-                    </div>
-
-                    {viewMode === 'items' ? (
-                        <div className="flex flex-col gap-[15px]">
-                            {scannedItems.length === 0 && <p className="text-white">No items found.</p>}
-                            {scannedItems.map((item, index) => (
-                                <div key={index} onClick={() => setSelectedDish(item)} className="bg-white rounded-lg p-[15px] cursor-pointer hover:bg-gray-50 transition-colors">
-                                    <div className="flex justify-between">
-                                        <h3 className="m-0 text-lg font-semibold text-black">{item.name}</h3>
-                                        <span className="text-green-600 font-bold">{item.price}</span>
-                                    </div>
-                                    <p className="text-[13px] text-gray-600">{item.description?.substring(0, 60)}...</p>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-lg p-[15px] whitespace-pre-wrap max-h-[60vh] overflow-y-auto text-black">
-                            {fullText || "No text extracted."}
-                        </div>
-                    )}
-
-                    <button onClick={() => setActiveTab('home')} className="mt-5 p-3 w-full bg-blue-500 text-white border-none rounded-lg hover:bg-blue-600 transition-colors">Scan Another</button>
-                </div>
-            );
-        }
-
-        if (activeTab === 'home') {
-            return (
-                <div className="p-5 pt-10">
-                    <input type="text" placeholder="Search dishes..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="w-full p-3 rounded-full border-none mb-5 text-black focus:ring-2 focus:ring-amber-400 outline-none" />
-
-                    <div onClick={() => setShowScanOptions(true)} className="bg-green-500 text-white p-5 rounded-2xl flex justify-between cursor-pointer mb-[30px] hover:bg-green-600 transition-colors">
-                        <div><h3 className="m-0 text-lg font-bold">Scan Menu</h3><p className="m-0 text-[14px]">Click to take a photo</p></div>
-                        <div className="text-[30px]">📸</div>
-                    </div>
-
-                    <h3 className="text-white mb-[15px] text-xl font-bold">Recommended for You</h3>
-                    <div className="flex flex-col gap-[15px]">
-                        {filteredDishes.map(dish => {
-                            const isLiked = favoriteItems.some(fav => fav.id === dish.id);
-                            return (
-                                <div key={dish.id} className="bg-white rounded-2xl p-[15px] flex justify-between items-center shadow-sm">
-                                    <div>
-                                        <h3 className="m-0 mb-1 text-base font-bold text-black">{dish.name}</h3>
-                                        <p className="m-0 mb-1 text-[13px] text-gray-600">{dish.place}</p>
-                                        <strong className="text-green-600">{dish.price}</strong>
-                                    </div>
-
-                                    <div onClick={() => toggleRecommendedLike(dish)} className="cursor-pointer text-xl select-none hover:scale-110 transition-transform">
-                                        {isLiked ? '❤️' : '🤍'}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        }
-        if (activeTab === 'chat') {
-            return (
-                <div className="flex flex-col h-full bg-white">
-                    <div className="flex-1 p-[15px] overflow-y-auto w-full">
-                        {chatMessages.map(msg => (
-                            <div key={msg.id} className={`max-w-[80%] p-[10px] rounded-2xl mb-2 text-sm ${msg.sender === 'user' ? 'self-end bg-blue-500 text-white rounded-tr-none ml-auto' : 'self-start bg-gray-100 text-black rounded-tl-none mr-auto'}`}>
-                                {msg.text}
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="flex p-[10px] border-t border-gray-100 bg-white">
-                        <input
-                            value={chatInput}
-                            onChange={(e) => setChatInput(e.target.value)}
-                            placeholder="Ask about food..."
-                            className="flex-1 p-[10px] border border-gray-200 rounded-l-lg outline-none focus:border-blue-500 text-black"
-                            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                        />
-                        <button onClick={sendMessage} className="bg-blue-500 text-white px-4 py-2 rounded-r-lg hover:bg-blue-600 transition-colors">Send</button>
-                    </div>
-                </div>
-            );
-        }
-
-        if (activeTab === 'profile') {
-            const user = auth.currentUser;
-            return (
-                <div className="p-5 text-white">
-                    <h2 className="mb-5 text-2xl font-bold">Your Profile</h2>
-                    <div className="bg-white rounded-2xl p-5 text-black flex flex-col items-center">
-                        <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-[40px] mb-[15px]">👤</div>
-                        <h3 className="m-0 text-xl font-bold">{user?.displayName || 'Guest User'}</h3>
-                        <p className="text-gray-500 mb-5">{user?.email || 'guest@example.com'}</p>
-
-                        <button onClick={() => setShowEditProfile(true)} className="w-full p-3 bg-black text-white border-none rounded-lg mb-[10px] font-bold hover:bg-gray-800 transition-colors">Edit Profile</button>
-                        <button onClick={onLogout} className="w-full p-3 bg-red-500 text-white border-none rounded-lg font-bold hover:bg-red-600 transition-colors">Logout</button>
-                    </div>
-                </div>
-            );
-        }
-
-        if (activeTab === 'history') {
-            return (
-                <div className="p-5">
-                    <h2 className="text-2xl font-bold text-white mb-5">Order History</h2>
-
-                    {historyItems.map(item => (
-                        <div key={item.id} className="bg-white p-[15px] rounded-lg mb-[10px] shadow-sm">
-                            <strong className="block text-black text-lg">{item.place}</strong>
-                            <p className="text-gray-600 my-1">{item.items}</p>
-                            <span className="text-green-600 font-bold">{item.total}</span>
-                        </div>
-                    ))}
-                </div>
-            );
-        }
-    };
-
-    interface NavIconProps {
-        name: Tab;
-        label: string;
-        path: React.ReactNode;
-    }
-
-    const NavIcon: React.FC<NavIconProps> = ({ name, label, path }) => (
-        <div onClick={() => setActiveTab(name)} className={`flex-1 flex flex-col items-center cursor-pointer transition-colors ${activeTab === name ? 'text-blue-500' : 'text-gray-400'} hover:text-blue-400`}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">{path}</svg>
-            <span className="text-xs mt-0.5">{label}</span>
-        </div>
-    );
 
     return (
-        <div className="w-screen h-screen flex items-center justify-center bg-[#333]">
-            <div className={containerStyle}>
-                <img src={foodBackground} alt="bg" className="absolute w-full h-full object-cover z-[1]" />
-                <div className="absolute w-full h-full bg-black/60 z-[2]"></div>
+        <div className="w-screen h-screen flex items-center justify-center bg-[#1a1a1a]">
+            <div className={containerStyle + " flex flex-col shadow-2xl relative overflow-hidden"}>
+                <img src={foodBackground} alt="bg" className="absolute w-full h-full object-cover z-[1] opacity-70" />
+                <div className="absolute w-full h-full bg-gradient-to-b from-black/80 via-black/40 to-black/90 z-[2]"></div>
 
-                <div className="flex-1 overflow-y-auto z-[3] relative">{renderContent()}</div>
+                <main className="flex-1 overflow-y-auto z-[3] relative custom-scrollbar">
+                    {activeTab === 'home' && (
+                        <HomeTab
+                            searchText={searchText}
+                            setSearchText={setSearchText}
+                            setShowScanOptions={setShowScanOptions}
+                            filteredDishes={filteredDishes}
+                            favoriteItems={favoriteItems}
+                            toggleRecommendedLike={toggleRecommendedLike}
+                        />
+                    )}
+                    {activeTab === 'results' && (
+                        <ResultsTab
+                            viewMode={viewMode}
+                            setViewMode={setViewMode}
+                            scannedItems={scannedItems}
+                            setSelectedDish={setSelectedDish}
+                            fullText={fullText}
+                            setActiveTab={setActiveTab}
+                        />
+                    )}
+                    {activeTab === 'chat' && (
+                        <ChatTab
+                            chatMessages={chatMessages}
+                            chatInput={chatInput}
+                            setChatInput={setChatInput}
+                            sendMessage={sendMessage}
+                        />
+                    )}
+                    {activeTab === 'profile' && (
+                        <ProfileTab
+                            user={auth.currentUser}
+                            setShowEditProfile={setShowEditProfile}
+                            onLogout={onLogout}
+                        />
+                    )}
+                    {activeTab === 'history' && (
+                        <HistoryTab historyItems={historyItems} />
+                    )}
+                </main>
 
-                <div className="h-[65px] bg-white flex items-center z-[10] border-t border-gray-100">
-                    <NavIcon name="home" label="Home" path={<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>} />
-                    <NavIcon name="chat" label="Chat" path={<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7"></path>} />
-                    <NavIcon name="profile" label="Profile" path={<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>} />
-                    <NavIcon name="history" label="History" path={<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>} />
-                </div>
+                <nav className="h-20 bg-white/95 backdrop-blur-xl flex items-center px-4 z-[10] border-t border-gray-200">
+                    <NavIcon name="home" label="Home" icon={<Home size={activeTab === 'home' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <NavIcon name="chat" label="AI Chat" icon={<MessageSquare size={activeTab === 'chat' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <NavIcon name="history" label="History" icon={<History size={activeTab === 'history' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <NavIcon name="profile" label="Me" icon={<User size={activeTab === 'profile' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
+                </nav>
 
-                {/* Overlays */}
-                {showScanOptions && (
-                    <div className="absolute bottom-0 w-full bg-white p-5 z-[100] rounded-t-2xl shadow-xl animate-slide-up">
-                        <button onClick={startCamera} className="block w-full p-4 mb-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors">Open Camera</button>
-                        <div className="relative">
-                            <input type="file" onChange={handleFileChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200" />
-                        </div>
-                        <button onClick={() => setShowScanOptions(false)} className="w-full mt-3 p-3 text-gray-500 hover:text-black transition-colors font-medium">Cancel</button>
-                    </div>
-                )}
-
-                {showEditProfile && (
-                    <div className="absolute inset-0 bg-black/70 flex justify-center items-center z-[200] backdrop-blur-sm">
-                        <div className="bg-white p-6 rounded-2xl w-[85%] shadow-2xl animate-fade">
-                            <h3 className="text-xl font-bold mb-4 text-black">Edit Profile</h3>
-                            <input placeholder="Full Name" className="w-full p-3 mb-3 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-black" />
-                            <input placeholder="Phone" className="w-full p-3 mb-4 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-black" />
-                            <div className="flex gap-2">
-                                <button onClick={() => setShowEditProfile(false)} className="flex-1 p-3 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">Save</button>
-                                <button onClick={() => setShowEditProfile(false)} className="flex-1 p-3 bg-gray-100 text-black rounded-lg font-bold hover:bg-gray-200 transition-colors">Cancel</button>
+                {/* Overlays / Dialogs */}
+                <Dialog open={showScanOptions} onOpenChange={setShowScanOptions}>
+                    <DialogContent className="sm:max-w-md rounded-3xl p-6 border-none">
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                                <Camera className="text-amber-500" /> Choose Import
+                            </DialogTitle>
+                            <DialogDescription>Capture a new photo or upload an existing image of your menu.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <Button onClick={startCamera} className="h-16 rounded-2xl gap-3 bg-black hover:bg-gray-800 text-lg font-bold">
+                                <Camera /> Take Photo
+                            </Button>
+                            <div className="relative group">
+                                <Button variant="outline" className="w-full h-16 rounded-2xl gap-3 border-gray-200 hover:bg-gray-50 text-lg font-bold">
+                                    <Edit size={20} /> Choose from Library
+                                </Button>
+                                <Input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer" />
                             </div>
                         </div>
-                    </div>
-                )}
+                        <DialogFooter>
+                            <Button variant="ghost" onClick={() => setShowScanOptions(false)} className="w-full text-gray-400">Cancel</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={showEditProfile} onOpenChange={setShowEditProfile}>
+                    <DialogContent className="sm:max-w-md rounded-3xl p-6 border-none">
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-bold">Edit Profile</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-5 py-4">
+                            <div className="space-y-2">
+                                <Label>Full Name</Label>
+                                <Input placeholder="John Doe" className="h-12 rounded-xl" />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Phone Number</Label>
+                                <Input placeholder="98XXXXXXXX" className="h-12 rounded-xl" />
+                            </div>
+                        </div>
+                        <DialogFooter className="flex sm:flex-row gap-2">
+                            <Button onClick={() => setShowEditProfile(false)} className="flex-1 h-12 rounded-xl bg-black font-bold">Save Changes</Button>
+                            <Button variant="outline" onClick={() => setShowEditProfile(false)} className="flex-1 h-12 rounded-xl border-gray-200 font-bold">Cancel</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={!!selectedDish} onOpenChange={() => setSelectedDish(null)}>
+                    <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+                        <div className="h-32 bg-amber-400 relative">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setSelectedDish(null)}
+                                className="absolute top-4 right-4 text-black hover:bg-black/10 rounded-full"
+                            >
+                                <X size={24} />
+                            </Button>
+                            <div className="absolute -bottom-10 left-8">
+                                <div className="w-20 h-20 bg-white rounded-2xl shadow-lg flex items-center justify-center text-3xl">🍲</div>
+                            </div>
+                        </div>
+                        <div className="p-8 pt-12">
+                            <DialogTitle className="text-3xl font-black text-black mb-2">{selectedDish?.name}</DialogTitle>
+                            <div className="text-green-600 text-xl font-bold mb-6">{selectedDish?.price}</div>
+
+                            <div className="space-y-6">
+                                <div>
+                                    <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Ingredients</Label>
+                                    <p className="text-gray-700 leading-relaxed mt-1">{selectedDish?.ingredients || 'No ingredients listed'}</p>
+                                </div>
+                                <Separator />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Calories</Label>
+                                        <p className="text-gray-900 font-bold mt-1 text-lg">{selectedDish?.calories || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Weight</Label>
+                                        <p className="text-gray-900 font-bold mt-1 text-lg">Approx. 450g</p>
+                                    </div>
+                                </div>
+                                <Separator />
+                                <div>
+                                    <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Description</Label>
+                                    <p className="text-gray-600 leading-relaxed mt-1 italic">"{selectedDish?.description || 'A delicious dish prepared with fresh ingredients.'}"</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-8 pt-0 mt-4">
+                            <Button onClick={() => setSelectedDish(null)} className="w-full h-14 rounded-2xl bg-black text-white text-lg font-bold">Got it!</Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={isCameraOpen} onOpenChange={(open) => !open && stopCamera()}>
+                    <DialogContent className="max-w-4xl p-0 h-[80vh] bg-black border-none overflow-hidden rounded-3xl">
+                        <div className="relative w-full h-full flex flex-col shadow-2xl">
+                            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                            <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+                            <div className="absolute top-6 right-6 z-50">
+                                <Button variant="ghost" size="icon" onClick={stopCamera} className="bg-white/20 backdrop-blur-md text-white hover:bg-white/40 rounded-full h-12 w-12">
+                                    <X size={28} />
+                                </Button>
+                            </div>
+
+                            <div className="absolute bottom-10 left-0 w-full flex justify-center items-center gap-8 z-50 px-6">
+                                <div className="flex-1" />
+                                <div className="relative">
+                                    <div className="absolute -inset-2 rounded-full border-2 border-white/50 animate-ping opacity-20" />
+                                    <button
+                                        onClick={takePhoto}
+                                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center border-4 border-white/20 shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-95 transition-all outline-none"
+                                    />
+                                </div>
+                                <div className="flex-1 flex justify-end">
+                                    <div className="text-white text-xs font-medium bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 uppercase tracking-widest">Live Menu View</div>
+                                </div>
+                            </div>
+
+                            <div className="absolute inset-0 border-[40px] border-black/10 pointer-events-none">
+                                <div className="w-full h-full border-2 border-white/20 rounded-xl relative">
+                                    <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-amber-400" />
+                                    <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-amber-400" />
+                                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-amber-400" />
+                                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-amber-400" />
+                                </div>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
 
                 {capturedImage && (
-                    <div className="absolute inset-0 bg-black z-[150] flex flex-col items-center justify-center">
-                        <img src={capturedImage} alt="Preview" className="w-[80%] rounded-2xl shadow-2xl mb-8" />
-                        <div className="flex gap-4">
-                            <button onClick={() => setCapturedImage(null)} disabled={analyzing} className="bg-red-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-red-600 transition-colors disabled:opacity-50">Retake</button>
-                            <button onClick={analyzeMenu} disabled={analyzing} className="bg-green-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-green-600 transition-colors disabled:opacity-50">
-                                {analyzing ? "Thinking..." : "Analyze Menu"}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {selectedDish && (
-                    <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-[200] backdrop-blur-sm">
-                        <div className="bg-white w-[85%] rounded-2xl p-6 shadow-2xl animate-fade">
-                            <h2 className="text-2xl font-bold mb-4 text-black">{selectedDish.name}</h2>
-                            <div className="space-y-3 mb-6">
-                                <p className="text-black"><strong className="text-gray-700">Calories:</strong> {selectedDish.calories || 'N/A'}</p>
-                                <p className="text-black"><strong className="text-gray-700">Ingredients:</strong> {selectedDish.ingredients || 'N/A'}</p>
-                                <p className="text-black leading-relaxed"><strong className="text-gray-700">Description:</strong> {selectedDish.description || 'N/A'}</p>
-                            </div>
-                            <button onClick={() => setSelectedDish(null)} className="w-full p-4 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-colors">Close</button>
+                    <div className="absolute inset-0 bg-black/95 z-[150] flex flex-col items-center justify-center p-6 animate-fade">
+                        <Card className="max-w-sm w-full bg-transparent border-none shadow-none overflow-hidden">
+                            <CardContent className="p-0">
+                                <img src={capturedImage} alt="Preview" className="w-full rounded-3xl shadow-2xl border border-white/10" />
+                            </CardContent>
+                        </Card>
+                        <div className="flex flex-col gap-4 mt-12 w-full max-w-sm">
+                            <Button onClick={analyzeMenu} disabled={analyzing} className="h-16 rounded-2xl bg-amber-400 text-black hover:bg-amber-500 text-lg font-black shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
+                                {analyzing ? "AI is Reading Menu..." : "Analyze This Menu"}
+                            </Button>
+                            <Button variant="ghost" onClick={() => setCapturedImage(null)} disabled={analyzing} className="h-12 text-white/60 hover:text-white font-bold disabled:opacity-50">
+                                Retake Photo
+                            </Button>
                         </div>
                     </div>
                 )}
@@ -433,3 +410,4 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 }
 
 export default Dashboard;
+
