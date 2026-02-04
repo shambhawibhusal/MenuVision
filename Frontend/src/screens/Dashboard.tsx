@@ -214,74 +214,73 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
     // --- UI Render ---
     const renderContent = () => {
-
         if (activeTab === 'results') {
             return (
-                <div style={{ padding: '20px' }}>
-                    <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white' }}>Analysis Results</h2>
+                <div className="p-5">
+                    <h2 className="text-2xl font-bold text-white">Analysis Results</h2>
 
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '15px', marginBottom: '15px' }}>
+                    <div className="flex gap-[10px] mt-[15px] mb-[15px]">
                         <button
                             onClick={() => setViewMode('items')}
-                            style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: viewMode === 'items' ? '#fbbf24' : '#444', color: viewMode === 'items' ? 'black' : 'white', fontWeight: 'bold' }}
+                            className={`flex-1 p-[10px] rounded-lg border-none font-bold ${viewMode === 'items' ? 'bg-amber-400 text-black' : 'bg-[#444] text-white'}`}
                         >
                             Menu Items
                         </button>
                         <button
                             onClick={() => setViewMode('text')}
-                            style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: viewMode === 'text' ? '#fbbf24' : '#444', color: viewMode === 'text' ? 'black' : 'white', fontWeight: 'bold' }}
+                            className={`flex-1 p-[10px] rounded-lg border-none font-bold ${viewMode === 'text' ? 'bg-amber-400 text-black' : 'bg-[#444] text-white'}`}
                         >
                             Full Text
                         </button>
                     </div>
 
                     {viewMode === 'items' ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                            {scannedItems.length === 0 && <p style={{ color: 'white' }}>No items found.</p>}
+                        <div className="flex flex-col gap-[15px]">
+                            {scannedItems.length === 0 && <p className="text-white">No items found.</p>}
                             {scannedItems.map((item, index) => (
-                                <div key={index} onClick={() => setSelectedDish(item)} style={{ backgroundColor: 'white', borderRadius: '10px', padding: '15px', cursor: 'pointer' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <h3 style={{ margin: 0 }}>{item.name}</h3>
-                                        <span style={{ color: 'green', fontWeight: 'bold' }}>{item.price}</span>
+                                <div key={index} onClick={() => setSelectedDish(item)} className="bg-white rounded-lg p-[15px] cursor-pointer hover:bg-gray-50 transition-colors">
+                                    <div className="flex justify-between">
+                                        <h3 className="m-0 text-lg font-semibold text-black">{item.name}</h3>
+                                        <span className="text-green-600 font-bold">{item.price}</span>
                                     </div>
-                                    <p style={{ fontSize: '13px', color: '#666' }}>{item.description?.substring(0, 60)}...</p>
+                                    <p className="text-[13px] text-gray-600">{item.description?.substring(0, 60)}...</p>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <div style={{ backgroundColor: 'white', borderRadius: '10px', padding: '15px', whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>
+                        <div className="bg-white rounded-lg p-[15px] whitespace-pre-wrap max-h-[60vh] overflow-y-auto text-black">
                             {fullText || "No text extracted."}
                         </div>
                     )}
 
-                    <button onClick={() => setActiveTab('home')} style={{ marginTop: '20px', padding: '12px', width: '100%', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px' }}>Scan Another</button>
+                    <button onClick={() => setActiveTab('home')} className="mt-5 p-3 w-full bg-blue-500 text-white border-none rounded-lg hover:bg-blue-600 transition-colors">Scan Another</button>
                 </div>
             );
         }
 
         if (activeTab === 'home') {
             return (
-                <div style={{ padding: '20px', paddingTop: '40px' }}>
-                    <input type="text" placeholder="Search dishes..." value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '30px', border: 'none', marginBottom: '20px' }} />
+                <div className="p-5 pt-10">
+                    <input type="text" placeholder="Search dishes..." value={searchText} onChange={(e) => setSearchText(e.target.value)} className="w-full p-3 rounded-full border-none mb-5 text-black focus:ring-2 focus:ring-amber-400 outline-none" />
 
-                    <div onClick={() => setShowScanOptions(true)} style={{ backgroundColor: '#22c55e', color: 'white', padding: '20px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '30px' }}>
-                        <div><h3 style={{ margin: 0 }}>Scan Menu</h3><p style={{ margin: 0, fontSize: '14px' }}>Click to take a photo</p></div>
-                        <div style={{ fontSize: '30px' }}>📸</div>
+                    <div onClick={() => setShowScanOptions(true)} className="bg-green-500 text-white p-5 rounded-2xl flex justify-between cursor-pointer mb-[30px] hover:bg-green-600 transition-colors">
+                        <div><h3 className="m-0 text-lg font-bold">Scan Menu</h3><p className="m-0 text-[14px]">Click to take a photo</p></div>
+                        <div className="text-[30px]">📸</div>
                     </div>
 
-                    <h3 style={{ color: 'white', marginBottom: '15px' }}>Recommended for You</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <h3 className="text-white mb-[15px] text-xl font-bold">Recommended for You</h3>
+                    <div className="flex flex-col gap-[15px]">
                         {filteredDishes.map(dish => {
                             const isLiked = favoriteItems.some(fav => fav.id === dish.id);
                             return (
-                                <div key={dish.id} style={{ backgroundColor: 'white', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div key={dish.id} className="bg-white rounded-2xl p-[15px] flex justify-between items-center shadow-sm">
                                     <div>
-                                        <h3 style={{ margin: '0 0 5px 0', fontSize: '16px' }}>{dish.name}</h3>
-                                        <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#666' }}>{dish.place}</p>
-                                        <strong style={{ color: '#22c55e' }}>{dish.price}</strong>
+                                        <h3 className="m-0 mb-1 text-base font-bold text-black">{dish.name}</h3>
+                                        <p className="m-0 mb-1 text-[13px] text-gray-600">{dish.place}</p>
+                                        <strong className="text-green-600">{dish.price}</strong>
                                     </div>
 
-                                    <div onClick={() => toggleRecommendedLike(dish)} style={{ cursor: 'pointer', fontSize: '20px' }}>
+                                    <div onClick={() => toggleRecommendedLike(dish)} className="cursor-pointer text-xl select-none hover:scale-110 transition-transform">
                                         {isLiked ? '❤️' : '🤍'}
                                     </div>
                                 </div>
@@ -293,48 +292,41 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
         if (activeTab === 'chat') {
             return (
-                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'white' }}>
-                    <div style={{ flex: 1, padding: '15px', overflowY: 'auto' }}>
+                <div className="flex flex-col h-full bg-white">
+                    <div className="flex-1 p-[15px] overflow-y-auto w-full">
                         {chatMessages.map(msg => (
-                            <div key={msg.id} style={{
-                                alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                                background: msg.sender === 'user' ? '#3b82f6' : '#eee',
-                                color: msg.sender === 'user' ? 'white' : 'black',
-                                padding: '10px',
-                                borderRadius: '15px',
-                                marginBottom: '8px'
-                            }}>
+                            <div key={msg.id} className={`max-w-[80%] p-[10px] rounded-2xl mb-2 text-sm ${msg.sender === 'user' ? 'self-end bg-blue-500 text-white rounded-tr-none ml-auto' : 'self-start bg-gray-100 text-black rounded-tl-none mr-auto'}`}>
                                 {msg.text}
                             </div>
                         ))}
                     </div>
 
-                    <div style={{ display: 'flex', padding: '10px' }}>
+                    <div className="flex p-[10px] border-t border-gray-100 bg-white">
                         <input
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             placeholder="Ask about food..."
-                            style={{ flex: 1, padding: '10px' }}
+                            className="flex-1 p-[10px] border border-gray-200 rounded-l-lg outline-none focus:border-blue-500 text-black"
+                            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                         />
-                        <button onClick={sendMessage}>Send</button>
+                        <button onClick={sendMessage} className="bg-blue-500 text-white px-4 py-2 rounded-r-lg hover:bg-blue-600 transition-colors">Send</button>
                     </div>
                 </div>
             );
         }
 
-
         if (activeTab === 'profile') {
             const user = auth.currentUser;
             return (
-                <div style={{ padding: '20px', color: 'white' }}>
-                    <h2 style={{ marginBottom: '20px' }}>Your Profile</h2>
-                    <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '20px', color: 'black', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '15px' }}>👤</div>
-                        <h3 style={{ margin: 0 }}>{user?.displayName || 'Guest User'}</h3>
-                        <p style={{ color: '#666', marginBottom: '20px' }}>{user?.email || 'guest@example.com'}</p>
+                <div className="p-5 text-white">
+                    <h2 className="mb-5 text-2xl font-bold">Your Profile</h2>
+                    <div className="bg-white rounded-2xl p-5 text-black flex flex-col items-center">
+                        <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center text-[40px] mb-[15px]">👤</div>
+                        <h3 className="m-0 text-xl font-bold">{user?.displayName || 'Guest User'}</h3>
+                        <p className="text-gray-500 mb-5">{user?.email || 'guest@example.com'}</p>
 
-                        <button onClick={() => setShowEditProfile(true)} style={{ width: '100%', padding: '12px', background: 'black', color: 'white', border: 'none', borderRadius: '8px', marginBottom: '10px' }}>Edit Profile</button>
-                        <button onClick={onLogout} style={{ width: '100%', padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}>Logout</button>
+                        <button onClick={() => setShowEditProfile(true)} className="w-full p-3 bg-black text-white border-none rounded-lg mb-[10px] font-bold hover:bg-gray-800 transition-colors">Edit Profile</button>
+                        <button onClick={onLogout} className="w-full p-3 bg-red-500 text-white border-none rounded-lg font-bold hover:bg-red-600 transition-colors">Logout</button>
                     </div>
                 </div>
             );
@@ -342,21 +334,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
         if (activeTab === 'history') {
             return (
-                <div style={{ padding: '20px' }}>
-                    <h2 style={{ color: 'white' }}>Order History</h2>
+                <div className="p-5">
+                    <h2 className="text-2xl font-bold text-white mb-5">Order History</h2>
 
                     {historyItems.map(item => (
-                        <div key={item.id} style={{ background: 'white', padding: '15px', borderRadius: '10px', marginBottom: '10px' }}>
-                            <strong>{item.place}</strong>
-                            <p>{item.items}</p>
-                            <span>{item.total}</span>
+                        <div key={item.id} className="bg-white p-[15px] rounded-lg mb-[10px] shadow-sm">
+                            <strong className="block text-black text-lg">{item.place}</strong>
+                            <p className="text-gray-600 my-1">{item.items}</p>
+                            <span className="text-green-600 font-bold">{item.total}</span>
                         </div>
                     ))}
                 </div>
             );
         }
-
-
     };
 
     interface NavIconProps {
@@ -366,55 +356,58 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }
 
     const NavIcon: React.FC<NavIconProps> = ({ name, label, path }) => (
-        <div onClick={() => setActiveTab(name)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', color: activeTab === name ? '#3b82f6' : 'gray' }}>
+        <div onClick={() => setActiveTab(name)} className={`flex-1 flex flex-col items-center cursor-pointer transition-colors ${activeTab === name ? 'text-blue-500' : 'text-gray-400'} hover:text-blue-400`}>
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">{path}</svg>
-            <span style={{ fontSize: '11px' }}>{label}</span>
+            <span className="text-xs mt-0.5">{label}</span>
         </div>
     );
 
     return (
-        <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#333' }}>
-            <div style={containerStyle}>
-                <img src={foodBackground} alt="bg" style={{ position: 'absolute', width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
-                <div style={{ position: 'absolute', width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 2 }}></div>
+        <div className="w-screen h-screen flex items-center justify-center bg-[#333]">
+            <div className={containerStyle}>
+                <img src={foodBackground} alt="bg" className="absolute w-full h-full object-cover z-[1]" />
+                <div className="absolute w-full h-full bg-black/60 z-[2]"></div>
 
-                <div style={{ flex: 1, overflowY: 'auto', zIndex: 3, position: 'relative' }}>{renderContent()}</div>
+                <div className="flex-1 overflow-y-auto z-[3] relative">{renderContent()}</div>
 
-                <div style={{ height: '65px', backgroundColor: 'white', display: 'flex', alignItems: 'center', zIndex: 10 }}>
+                <div className="h-[65px] bg-white flex items-center z-[10] border-t border-gray-100">
                     <NavIcon name="home" label="Home" path={<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>} />
                     <NavIcon name="chat" label="Chat" path={<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7"></path>} />
                     <NavIcon name="profile" label="Profile" path={<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>} />
                     <NavIcon name="history" label="History" path={<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>} />
-
                 </div>
 
                 {/* Overlays */}
                 {showScanOptions && (
-                    <div style={{ position: 'absolute', bottom: 0, width: '100%', backgroundColor: 'white', padding: '20px', zIndex: 100, borderTopLeftRadius: '20px' }}>
-                        <button onClick={startCamera} style={{ display: 'block', width: '100%', padding: '15px', marginBottom: '10px' }}>Open Camera</button>
-                        <input type="file" onChange={handleFileChange} style={{ display: 'block', width: '100%' }} />
-                        <button onClick={() => setShowScanOptions(false)} style={{ width: '100%', marginTop: '10px' }}>Cancel</button>
+                    <div className="absolute bottom-0 w-full bg-white p-5 z-[100] rounded-t-2xl shadow-xl animate-slide-up">
+                        <button onClick={startCamera} className="block w-full p-4 mb-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition-colors">Open Camera</button>
+                        <div className="relative">
+                            <input type="file" onChange={handleFileChange} className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200" />
+                        </div>
+                        <button onClick={() => setShowScanOptions(false)} className="w-full mt-3 p-3 text-gray-500 hover:text-black transition-colors font-medium">Cancel</button>
                     </div>
                 )}
 
                 {showEditProfile && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 200 }}>
-                        <div style={{ background: 'white', padding: '20px', borderRadius: '10px', width: '85%' }}>
-                            <h3>Edit Profile</h3>
-                            <input placeholder="Full Name" style={{ width: '100%', marginBottom: '10px' }} />
-                            <input placeholder="Phone" style={{ width: '100%', marginBottom: '10px' }} />
-                            <button onClick={() => setShowEditProfile(false)}>Save</button>
+                    <div className="absolute inset-0 bg-black/70 flex justify-center items-center z-[200] backdrop-blur-sm">
+                        <div className="bg-white p-6 rounded-2xl w-[85%] shadow-2xl animate-fade">
+                            <h3 className="text-xl font-bold mb-4 text-black">Edit Profile</h3>
+                            <input placeholder="Full Name" className="w-full p-3 mb-3 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-black" />
+                            <input placeholder="Phone" className="w-full p-3 mb-4 border border-gray-200 rounded-lg outline-none focus:border-blue-500 text-black" />
+                            <div className="flex gap-2">
+                                <button onClick={() => setShowEditProfile(false)} className="flex-1 p-3 bg-black text-white rounded-lg font-bold hover:bg-gray-800 transition-colors">Save</button>
+                                <button onClick={() => setShowEditProfile(false)} className="flex-1 p-3 bg-gray-100 text-black rounded-lg font-bold hover:bg-gray-200 transition-colors">Cancel</button>
+                            </div>
                         </div>
                     </div>
                 )}
 
-
                 {capturedImage && (
-                    <div style={{ position: 'absolute', top: 0, width: '100%', height: '100%', backgroundColor: 'black', zIndex: 150, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <img src={capturedImage} alt="Preview" style={{ width: '80%', borderRadius: '10px' }} />
-                        <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                            <button onClick={() => setCapturedImage(null)} disabled={analyzing} style={{ background: 'red', color: 'white', padding: '10px 20px' }}>Retake</button>
-                            <button onClick={analyzeMenu} disabled={analyzing} style={{ background: 'green', color: 'white', padding: '10px 20px' }}>
+                    <div className="absolute inset-0 bg-black z-[150] flex flex-col items-center justify-center">
+                        <img src={capturedImage} alt="Preview" className="w-[80%] rounded-2xl shadow-2xl mb-8" />
+                        <div className="flex gap-4">
+                            <button onClick={() => setCapturedImage(null)} disabled={analyzing} className="bg-red-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-red-600 transition-colors disabled:opacity-50">Retake</button>
+                            <button onClick={analyzeMenu} disabled={analyzing} className="bg-green-500 text-white px-8 py-3 rounded-full font-bold shadow-lg hover:bg-green-600 transition-colors disabled:opacity-50">
                                 {analyzing ? "Thinking..." : "Analyze Menu"}
                             </button>
                         </div>
@@ -422,13 +415,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 )}
 
                 {selectedDish && (
-                    <div style={{ position: 'absolute', top: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.9)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ backgroundColor: 'white', width: '85%', borderRadius: '15px', padding: '20px' }}>
-                            <h2>{selectedDish.name}</h2>
-                            <p><strong>Calories:</strong> {selectedDish.calories}</p>
-                            <p><strong>Ingredients:</strong> {selectedDish.ingredients}</p>
-                            <p><strong>Description:</strong> {selectedDish.description}</p>
-                            <button onClick={() => setSelectedDish(null)} style={{ width: '100%', padding: '10px', background: 'black', color: 'white' }}>Close</button>
+                    <div className="absolute inset-0 bg-black/90 flex items-center justify-center z-[200] backdrop-blur-sm">
+                        <div className="bg-white w-[85%] rounded-2xl p-6 shadow-2xl animate-fade">
+                            <h2 className="text-2xl font-bold mb-4 text-black">{selectedDish.name}</h2>
+                            <div className="space-y-3 mb-6">
+                                <p className="text-black"><strong className="text-gray-700">Calories:</strong> {selectedDish.calories || 'N/A'}</p>
+                                <p className="text-black"><strong className="text-gray-700">Ingredients:</strong> {selectedDish.ingredients || 'N/A'}</p>
+                                <p className="text-black leading-relaxed"><strong className="text-gray-700">Description:</strong> {selectedDish.description || 'N/A'}</p>
+                            </div>
+                            <button onClick={() => setSelectedDish(null)} className="w-full p-4 bg-black text-white rounded-xl font-bold hover:bg-gray-800 transition-colors">Close</button>
                         </div>
                     </div>
                 )}

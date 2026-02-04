@@ -37,24 +37,24 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
     };
 
     return (
-        <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d1d5db' }}>
-            <div style={containerStyle}>
-                <img src={foodBackground} alt="Food background" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.2)', backdropFilter: 'blur(2px)', zIndex: 2 }}></div>
+        <div className="w-screen h-screen flex items-center justify-center bg-gray-300">
+            <div className={containerStyle}>
+                <img src={foodBackground} alt="Food background" className="absolute top-0 left-0 w-full h-full object-cover z-[1]" />
+                <div className="absolute top-0 left-0 w-full h-full bg-black/20 backdrop-blur-[2px] z-[2]"></div>
                 <BackButton onClick={onBack} />
-                <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '350px', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', borderRadius: '10px' }}>
-                        <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '30px' }}>
-                            <label style={{ fontSize: '20px', color: 'black', marginRight: '10px' }}>Email:</label>
-                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: '60%', height: '35px', border: '1px solid #555', paddingLeft: '5px' }} />
+                <div className="relative w-full h-full z-[3] flex flex-col items-center justify-center p-5">
+                    <div className="bg-white w-full max-w-[350px] py-10 px-5 flex flex-col items-center shadow-md rounded-lg">
+                        <div className="w-full flex items-center justify-between mb-[30px]">
+                            <label className="text-xl color-black mr-[10px]">Email:</label>
+                            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-[60%] h-[35px] border border-[#555] pl-1" />
                         </div>
-                        <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: error ? '20px' : '60px' }}>
-                            <label style={{ fontSize: '20px', color: 'black', marginRight: '10px' }}>Password:</label>
-                            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: '60%', height: '35px', border: '1px solid #555', paddingLeft: '5px' }} />
+                        <div className={`w-full flex items-center justify-between ${error ? 'mb-5' : 'mb-[60px]'}`}>
+                            <label className="text-xl color-black mr-[10px]">Password:</label>
+                            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-[60%] h-[35px] border border-[#555] pl-1" />
                         </div>
-                        {error && <div style={{ color: 'red', fontSize: '14px', fontWeight: 'bold', marginBottom: '20px', textAlign: 'center' }}>{error}</div>}
-                        <button onClick={handleLogin} style={{ width: '200px', padding: '10px 0', borderRadius: '50px', border: '3px solid black', backgroundColor: 'white', color: 'black', fontSize: '22px', fontWeight: '500', cursor: 'pointer', marginBottom: '20px' }}>Login</button>
-                        <div style={{ fontSize: '16px', color: 'black' }}>Dont have account? <span onClick={onSignupClick} style={{ color: '#3b82f6', cursor: 'pointer' }}>Signup</span></div>
+                        {error && <div className="text-red-600 text-[14px] font-bold mb-5 text-center">{error}</div>}
+                        <button onClick={handleLogin} className="w-[200px] py-[10px] rounded-full border-[3px] border-black bg-white text-black text-[22px] font-medium cursor-pointer mb-5 hover:bg-black hover:text-white transition-colors">Login</button>
+                        <div className="text-base text-black">Dont have account? <span onClick={onSignupClick} className="text-blue-600 cursor-pointer hover:underline">Signup</span></div>
                     </div>
                 </div>
             </div>

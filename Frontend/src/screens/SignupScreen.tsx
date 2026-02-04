@@ -87,35 +87,46 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
         }
     };
 
-    const rowStyle = { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '25px' };
-    const labelStyle = { fontSize: '18px', color: 'black', whiteSpace: 'nowrap' };
-    const inputStyle = { width: '55%', height: '30px', border: '1px solid #555', paddingLeft: '5px' };
-
     return (
-        <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d1d5db' }}>
-            <div style={containerStyle}>
-                <img src={foodBackground} alt="Food background" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 }} />
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0, 0, 0, 0.2)', backdropFilter: 'blur(2px)', zIndex: 2 }}></div>
+        <div className="w-screen h-screen flex items-center justify-center bg-gray-300">
+            <div className={containerStyle}>
+                <img src={foodBackground} alt="Food background" className="absolute top-0 left-0 w-full h-full object-cover z-[1]" />
+                <div className="absolute top-0 left-0 w-full h-full bg-black/20 backdrop-blur-[2px] z-[2]"></div>
                 <BackButton onClick={onBack} />
-                <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                    <div style={{ backgroundColor: 'white', width: '100%', maxWidth: '350px', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', borderRadius: '10px' }}>
-                        <div style={rowStyle}><label style={labelStyle}>Email:</label><input name="email" onChange={handleChange} type="email" style={inputStyle} /></div>
-                        <div style={rowStyle}><label style={labelStyle}>Full name:</label><input name="fullname" onChange={handleChange} type="text" style={inputStyle} /></div>
-                        <div style={rowStyle}><label style={labelStyle}>Phone no:</label><input name="phone" placeholder="98XXXXXXXX" onChange={handleChange} type="tel" style={inputStyle} /></div>
-                        <div style={rowStyle}><label style={labelStyle}>Password:</label><input name="password" onChange={handleChange} type="password" style={inputStyle} /></div>
-                        <div style={rowStyle}><label style={labelStyle}>Confirm:</label><input name="confirmPassword" onChange={handleChange} type="password" style={{ ...inputStyle, width: '35%' }} /></div>
-                        {error && <div style={{ color: 'red', fontSize: '14px', fontWeight: 'bold', marginBottom: '10px', textAlign: 'center' }}>{error}</div>}
-                        <button onClick={handleSignupClick} disabled={loading} style={{ width: '200px', padding: '10px 0', borderRadius: '50px', border: '3px solid black', backgroundColor: 'white', color: 'black', fontSize: '20px', fontWeight: '500', cursor: 'pointer' }}>{loading ? 'Processing...' : 'Sign Up'}</button>
+                <div className="relative w-full h-full z-[3] flex flex-col items-center justify-center p-5">
+                    <div className="bg-white w-full max-w-[350px] py-10 px-5 flex flex-col items-center shadow-md rounded-lg">
+                        <div className="w-full flex items-center justify-between mb-6">
+                            <label className="text-lg text-black whitespace-nowrap">Email:</label>
+                            <input name="email" onChange={handleChange} type="email" className="w-[55%] h-[30px] border border-[#555] pl-1" />
+                        </div>
+                        <div className="w-full flex items-center justify-between mb-6">
+                            <label className="text-lg text-black whitespace-nowrap">Full name:</label>
+                            <input name="fullname" onChange={handleChange} type="text" className="w-[55%] h-[30px] border border-[#555] pl-1" />
+                        </div>
+                        <div className="w-full flex items-center justify-between mb-6">
+                            <label className="text-lg text-black whitespace-nowrap">Phone no:</label>
+                            <input name="phone" placeholder="98XXXXXXXX" onChange={handleChange} type="tel" className="w-[55%] h-[30px] border border-[#555] pl-1" />
+                        </div>
+                        <div className="w-full flex items-center justify-between mb-6">
+                            <label className="text-lg text-black whitespace-nowrap">Password:</label>
+                            <input name="password" onChange={handleChange} type="password" className="w-[55%] h-[30px] border border-[#555] pl-1" />
+                        </div>
+                        <div className="w-full flex items-center justify-between mb-6">
+                            <label className="text-lg text-black whitespace-nowrap">Confirm:</label>
+                            <input name="confirmPassword" onChange={handleChange} type="password" className="w-[35%] h-[30px] border border-[#555] pl-1" />
+                        </div>
+                        {error && <div className="text-red-600 text-[14px] font-bold mb-[10px] text-center">{error}</div>}
+                        <button onClick={handleSignupClick} disabled={loading} className="w-[200px] py-[10px] rounded-full border-[3px] border-black bg-white text-black text-xl font-medium cursor-pointer disabled:opacity-50 hover:bg-black hover:text-white transition-colors">{loading ? 'Processing...' : 'Sign Up'}</button>
                     </div>
                 </div>
                 {showOtpPopup && (
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ backgroundColor: 'white', padding: '30px', borderRadius: '10px', width: '85%', maxWidth: '320px', textAlign: 'center' }}>
-                            <h3 style={{ marginBottom: '20px', fontSize: '22px', fontWeight: 'bold' }}>Verification</h3>
-                            <p style={{ marginBottom: '20px' }}>Enter the OTP sent to <br /><b>+977 {formData.phone}</b></p>
-                            <input type="number" placeholder="123456" value={otp} onChange={(e) => setOtp(e.target.value)} style={{ width: '100%', height: '45px', fontSize: '22px', textAlign: 'center', letterSpacing: '5px', marginBottom: '20px', border: '2px solid #ccc', borderRadius: '5px' }} />
-                            <button onClick={handleVerifyOtp} style={{ width: '100%', padding: '12px', backgroundColor: 'green', color: 'white', fontSize: '18px', borderRadius: '5px', border: 'none', cursor: 'pointer', marginBottom: '10px' }}>Verify Code</button>
-                            <button onClick={() => setShowOtpPopup(false)} style={{ background: 'none', border: 'none', color: 'red', cursor: 'pointer', textDecoration: 'underline' }}>Cancel</button>
+                    <div className="absolute top-0 left-0 w-full h-full bg-black/80 z-[100] flex items-center justify-center">
+                        <div className="bg-white p-[30px] rounded-lg w-[85%] max-w-[320px] text-center">
+                            <h3 className="mb-5 text-[22px] font-bold">Verification</h3>
+                            <p className="mb-5">Enter the OTP sent to <br /><b>+977 {formData.phone}</b></p>
+                            <input type="number" placeholder="123456" value={otp} onChange={(e) => setOtp(e.target.value)} className="w-full h-[45px] text-[22px] text-center tracking-[5px] mb-5 border-2 border-gray-300 rounded" />
+                            <button onClick={handleVerifyOtp} className="w-full p-3 bg-green-600 text-white text-lg rounded-md border-none cursor-pointer mb-[10px] hover:bg-green-700 transition-colors">Verify Code</button>
+                            <button onClick={() => setShowOtpPopup(false)} className="bg-none border-none text-red-600 cursor-pointer underline">Cancel</button>
                         </div>
                     </div>
                 )}
