@@ -9,6 +9,22 @@ function Dashboard({ onLogout }) {
     const [capturedImage, setCapturedImage] = useState(null);
     const [analyzing, setAnalyzing] = useState(false);
 
+    const [historyView, setHistoryView] = useState('history');
+
+    const [historyItems, setHistoryItems] = useState([
+        { id: 1, place: 'Burger House', date: '20 Dec 2025', items: '2x Chicken Burger, 1x Coke', total: 'Rs. 550' },
+    ]);
+
+    const [favoriteItems, setFavoriteItems] = useState([]);
+
+    const toggleRecommendedLike = (dish) => {
+        const isFav = favoriteItems.some(item => item.id === dish.id);
+        if (isFav) {
+            setFavoriteItems(favoriteItems.filter(item => item.id !== dish.id));
+        } else {
+            setFavoriteItems([...favoriteItems, dish]);
+        }
+    };
     // -- Data States
     const [scannedItems, setScannedItems] = useState([]);
     const [fullText, setFullText] = useState('');
@@ -29,6 +45,17 @@ function Dashboard({ onLogout }) {
     const [showEditProfile, setShowEditProfile] = useState(false);
     const [editData, setEditData] = useState({ fullname: '', phone: '', password: '' });
 
+    // -- Recommended Dishes Data
+    const [recommendedDishes] = useState([
+        { id: 101, name: 'Spicy Ramen', place: 'Ichiraku Ramen', price: 'Rs. 450' },
+        { id: 102, name: 'Cheese Pizza', place: 'Pizza Hut', price: 'Rs. 800' },
+        { id: 103, name: 'Chicken MoMo', place: 'Everest MoMo', price: 'Rs. 250' },
+    ]);
+
+    const filteredDishes = recommendedDishes.filter(dish =>
+        dish.name.toLowerCase().includes(searchText.toLowerCase())
+    );
+
     // -- Camera Refs
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
@@ -39,29 +66,49 @@ function Dashboard({ onLogout }) {
 
         setAnalyzing(true);
         try {
-            const currentUser = auth.currentUser;
-            const response = await fetch('http://localhost:5000/analyzeMenu', {
+            // Convert data URL to Blob for FormData
+            const responseBlob = await fetch(capturedImage);
+            const blob = await responseBlob.blob();
+
+            const formData = new FormData();
+            formData.append('file', blob, 'menu.png');
+
+            const response = await fetch('https://api.easyocr.org/ocr', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    imageUrl: capturedImage,
-                    userId: currentUser ? currentUser.uid : 'guest'
-                })
+                body: formData
             });
 
-            const data = await response.json();
-            if (data.success) {
-                setScannedItems(data.menuItems || []);
-                setFullText(data.fullText || '');
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `OCR API error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log("OCR result:", result);
+
+            // Correctly handle if result.words is an array of objects [object Object]
+            let extractedText = "";
+            if (result.words && Array.isArray(result.words)) {
+                extractedText = result.words.map(w => {
+                    if (typeof w === 'string') return w;
+                    return w.text || w.word || JSON.stringify(w);
+                }).join(' ');
+            } else if (result.words) {
+                extractedText = result.words;
+            }
+
+            if (extractedText) {
+                setFullText(extractedText);
+                setScannedItems([]);
                 setCapturedImage(null);
                 setActiveTab("results");
-                setViewMode('items');
+                setViewMode('text');
             } else {
-                alert(data.error || "AI could not read the menu. Please try a clearer photo.");
+                alert("AI could not read the menu. Please try a clearer photo.");
             }
         } catch (err) {
             console.error(err);
-            alert("Connection error: " + err.message);
+            alert("Error: " + err.message);
         } finally {
             setAnalyzing(false);
         }
@@ -112,12 +159,6 @@ function Dashboard({ onLogout }) {
         }
     };
 
-    // --- Recommended Dishes Data ---
-    const recommendedDishes = [
-        { id: 101, name: 'Spicy Ramen', place: 'Hokkaido Ramen', price: 'Rs. 450', img: '🍜' },
-        { id: 102, name: 'Butter Chicken', place: 'Tandoori Nights', price: 'Rs. 950', img: '🍛' },
-    ];
-    const filteredDishes = recommendedDishes.filter(dish => dish.name.toLowerCase().includes(searchText.toLowerCase()));
 
     // --- UI Render ---
     const renderContent = () => {
@@ -170,13 +211,107 @@ function Dashboard({ onLogout }) {
                 <div style={{ padding: '20px', paddingTop: '40px' }}>
                     <input type="text" placeholder="Search dishes..." value={searchText} onChange={(e) => setSearchText(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '30px', border: 'none', marginBottom: '20px' }} />
 
-                    <div onClick={() => setShowScanOptions(true)} style={{ backgroundColor: '#22c55e', color: 'white', padding: '20px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }}>
+                    <div onClick={() => setShowScanOptions(true)} style={{ backgroundColor: '#22c55e', color: 'white', padding: '20px', borderRadius: '15px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer', marginBottom: '30px' }}>
                         <div><h3 style={{ margin: 0 }}>Scan Menu</h3><p style={{ margin: 0, fontSize: '14px' }}>Click to take a photo</p></div>
                         <div style={{ fontSize: '30px' }}>📸</div>
+                    </div>
+
+                    <h3 style={{ color: 'white', marginBottom: '15px' }}>Recommended for You</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        {filteredDishes.map(dish => {
+                            const isLiked = favoriteItems.some(fav => fav.id === dish.id);
+                            return (
+                                <div key={dish.id} style={{ backgroundColor: 'white', borderRadius: '15px', padding: '15px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <h3 style={{ margin: '0 0 5px 0', fontSize: '16px' }}>{dish.name}</h3>
+                                        <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#666' }}>{dish.place}</p>
+                                        <strong style={{ color: '#22c55e' }}>{dish.price}</strong>
+                                    </div>
+
+                                    <div onClick={() => toggleRecommendedLike(dish)} style={{ cursor: 'pointer', fontSize: '20px' }}>
+                                        {isLiked ? '❤️' : '🤍'}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             );
         }
+        if (activeTab === 'chat') {
+            return (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'white' }}>
+                    <div style={{ flex: 1, padding: '15px', overflowY: 'auto' }}>
+                        {chatMessages.map(msg => (
+                            <div key={msg.id} style={{
+                                alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                                background: msg.sender === 'user' ? '#3b82f6' : '#eee',
+                                color: msg.sender === 'user' ? 'white' : 'black',
+                                padding: '10px',
+                                borderRadius: '15px',
+                                marginBottom: '8px'
+                            }}>
+                                {msg.text}
+                            </div>
+                        ))}
+                    </div>
+
+                    <div style={{ display: 'flex', padding: '10px' }}>
+                        <input
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Ask about food..."
+                            style={{ flex: 1, padding: '10px' }}
+                        />
+                        <button onClick={sendMessage}>Send</button>
+                    </div>
+                </div>
+            );
+        }
+        const sendMessage = () => {
+            if (!chatInput.trim()) return;
+            setChatMessages([...chatMessages, { id: Date.now(), text: chatInput, sender: 'user' }]);
+            setChatInput('');
+
+            setTimeout(() => {
+                setChatMessages(prev => [...prev, { id: Date.now() + 1, text: "I can help you choose dishes 🍽️", sender: 'bot' }]);
+            }, 800);
+        };
+
+        if (activeTab === 'profile') {
+            const user = auth.currentUser;
+            return (
+                <div style={{ padding: '20px', color: 'white' }}>
+                    <h2 style={{ marginBottom: '20px' }}>Your Profile</h2>
+                    <div style={{ backgroundColor: 'white', borderRadius: '15px', padding: '20px', color: 'black', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ width: '80px', height: '80px', borderRadius: '50%', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '40px', marginBottom: '15px' }}>👤</div>
+                        <h3 style={{ margin: 0 }}>{user?.displayName || 'Guest User'}</h3>
+                        <p style={{ color: '#666', marginBottom: '20px' }}>{user?.email || 'guest@example.com'}</p>
+
+                        <button onClick={() => setShowEditProfile(true)} style={{ width: '100%', padding: '12px', background: 'black', color: 'white', border: 'none', borderRadius: '8px', marginBottom: '10px' }}>Edit Profile</button>
+                        <button onClick={onLogout} style={{ width: '100%', padding: '12px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '8px' }}>Logout</button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (activeTab === 'history') {
+            return (
+                <div style={{ padding: '20px' }}>
+                    <h2 style={{ color: 'white' }}>Order History</h2>
+
+                    {historyItems.map(item => (
+                        <div key={item.id} style={{ background: 'white', padding: '15px', borderRadius: '10px', marginBottom: '10px' }}>
+                            <strong>{item.place}</strong>
+                            <p>{item.items}</p>
+                            <span>{item.total}</span>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+
     };
 
     const NavIcon = ({ name, label, path }) => (
@@ -198,6 +333,8 @@ function Dashboard({ onLogout }) {
                     <NavIcon name="home" label="Home" path={<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>} />
                     <NavIcon name="chat" label="Chat" path={<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7"></path>} />
                     <NavIcon name="profile" label="Profile" path={<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>} />
+                    <NavIcon name="history" label="History" path={<><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>} />
+
                 </div>
 
                 {/* Overlays */}
@@ -208,6 +345,18 @@ function Dashboard({ onLogout }) {
                         <button onClick={() => setShowScanOptions(false)} style={{ width: '100%', marginTop: '10px' }}>Cancel</button>
                     </div>
                 )}
+
+                {showEditProfile && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 200 }}>
+                        <div style={{ background: 'white', padding: '20px', borderRadius: '10px', width: '85%' }}>
+                            <h3>Edit Profile</h3>
+                            <input placeholder="Full Name" style={{ width: '100%', marginBottom: '10px' }} />
+                            <input placeholder="Phone" style={{ width: '100%', marginBottom: '10px' }} />
+                            <button onClick={() => setShowEditProfile(false)}>Save</button>
+                        </div>
+                    </div>
+                )}
+
 
                 {capturedImage && (
                     <div style={{ position: 'absolute', top: 0, width: '100%', height: '100%', backgroundColor: 'black', zIndex: 150, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
