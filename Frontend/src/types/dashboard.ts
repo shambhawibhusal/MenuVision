@@ -19,6 +19,7 @@ export interface HistoryItem {
     date: string;
     items: string;
     total: string;
+    scannedItems?: ScannedItem[];
 }
 
 export interface ChatMessage {

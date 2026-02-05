@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { auth } from '../firebase';
+import { auth, db } from '../firebase';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
 import foodBackground from '../assets/food.png';
 import { containerStyle } from '../utils/styles';
 import { Button } from "@/components/ui/button";
@@ -36,20 +37,58 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [activeTab, setActiveTab] = useState<Tab>('home');
     const [showScanOptions, setShowScanOptions] = useState(false);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
+    const [imageBlob, setImageBlob] = useState<Blob | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
 
-    const [historyItems] = useState<HistoryItem[]>([
-        { id: 1, place: 'Burger House', date: '20 Dec 2025', items: '2x Chicken Burger, 1x Coke', total: 'Rs. 550' },
-    ]);
-
+    const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
 
-    const toggleRecommendedLike = (dish: Dish) => {
+    // -- Fetch User Data from Firestore
+    React.useEffect(() => {
+        const fetchUserData = async () => {
+            if (!auth.currentUser) return;
+
+            try {
+                const userDocRef = doc(db, 'users', auth.currentUser.uid);
+                const userDoc = await getDoc(userDocRef);
+
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    if (data.favorites) setFavoriteItems(data.favorites);
+                    if (data.history) setHistoryItems(data.history);
+                } else {
+                    // Initialize user document if it doesn't exist
+                    await setDoc(userDocRef, { favorites: [], history: [] });
+                }
+            } catch (error) {
+                console.error("Error fetching user data:", error);
+            }
+        };
+
+        fetchUserData();
+    }, []);
+
+    const toggleRecommendedLike = async (dish: Dish) => {
+        if (!auth.currentUser) return;
+
         const isFav = favoriteItems.some(item => item.id === dish.id);
-        if (isFav) {
-            setFavoriteItems(favoriteItems.filter(item => item.id !== dish.id));
-        } else {
-            setFavoriteItems([...favoriteItems, dish]);
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+
+        try {
+            if (isFav) {
+                setFavoriteItems(prev => prev.filter(item => item.id !== dish.id));
+                await updateDoc(userDocRef, {
+                    favorites: arrayRemove(dish)
+                });
+            } else {
+                setFavoriteItems(prev => [...prev, dish]);
+                await updateDoc(userDocRef, {
+                    favorites: arrayUnion(dish)
+                });
+            }
+        } catch (error) {
+            console.error("Error updating favorites:", error);
+            // Optionally rollback state or show alert
         }
     };
     // -- Data States
@@ -85,17 +124,57 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const [isCameraOpen, setIsCameraOpen] = useState(false);
 
+    // -- Helper to resize images for API compliance
+    const resizeImage = (blob: Blob): Promise<Blob> => {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.src = URL.createObjectURL(blob);
+            img.onload = () => {
+                URL.revokeObjectURL(img.src);
+                const MAX_DIM = 1200;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_DIM) {
+                        height *= MAX_DIM / width;
+                        width = MAX_DIM;
+                    }
+                } else {
+                    if (height > MAX_DIM) {
+                        width *= MAX_DIM / height;
+                        height = MAX_DIM;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0, width, height);
+                canvas.toBlob((resizedBlob) => {
+                    resolve(resizedBlob || blob);
+                }, 'image/jpeg', 0.8);
+            };
+            img.onerror = () => resolve(blob);
+        });
+    };
+
     // --- ANALYZE MENU ---
     const analyzeMenu = async () => {
-        if (!capturedImage || analyzing) return;
+        if (!imageBlob || analyzing) return;
 
         setAnalyzing(true);
-        try {
-            const responseBlob = await fetch(capturedImage);
-            const blob = await responseBlob.blob();
+        console.log("Starting analysis with blob:", {
+            size: (imageBlob.size / 1024).toFixed(2) + " KB",
+            type: imageBlob.type
+        });
 
+        try {
             const formData = new FormData();
-            formData.append('file', blob, 'menu.png');
+            // Use .jpg for jpeg blobs, .png for others
+            const extension = imageBlob.type === 'image/png' ? 'png' : 'jpg';
+            formData.append('file', imageBlob, `menu.${extension}`);
 
             const response = await fetch('https://api.easyocr.org/ocr', {
                 method: 'POST',
@@ -103,29 +182,178 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `OCR API error: ${response.status}`);
+                const errorText = await response.text();
+                console.error("OCR API Error Response:", errorText);
+                throw new Error(`OCR API error ${response.status}: ${errorText || 'Unknown error'}`);
             }
 
             const result = await response.json();
-            console.log("OCR result:", result);
+            console.log("OCR Result:", result);
 
             let extractedText = "";
+            let items: ScannedItem[] = [];
+
             if (result.words && Array.isArray(result.words)) {
-                extractedText = result.words.map((w: any) => {
-                    if (typeof w === 'string') return w;
-                    return w.text || w.word || JSON.stringify(w);
-                }).join(' ');
+                // 1. EXTRACT RAW DATA
+                const rawWords = result.words.map((w: any) => {
+                    let text = "";
+                    let y = 0;
+                    if (typeof w === 'string') {
+                        text = w;
+                    } else if (Array.isArray(w)) {
+                        text = w[1] || "";
+                        if (w[0] && Array.isArray(w[0])) {
+                            y = w[0].reduce((acc: number, pt: any) => acc + (pt[1] || 0), 0) / w[0].length;
+                        }
+                    } else if (w && typeof w === 'object') {
+                        text = w.text || w.word || "";
+                        const box = w.box || w.coords || w.geometry;
+                        if (Array.isArray(box) && box[0]) y = box[0][1] || 0;
+                    }
+                    return { text: text.trim(), y };
+                }).filter((w: any) => w.text.length > 0);
+
+                extractedText = rawWords.map((w: any) => w.text).join(' ');
+
+                // 2. HYBRID PARSING LOGIC
+                const parseItems = (wordList: any[]) => {
+                    const detectedItems: ScannedItem[] = [];
+                    const priceRegex = /(?:Rs\.?|Rs|NPR|\$|€|£)?\s?\d+(?:[\.,\s]\d{1,2})?/gi;
+                    // Refined keywords to prevent filtering valid items like "Tea"
+                    const headerKeywords = ['menu', 'items', 'list', 'page', 'restaurant', 'scanned', '~~~'];
+
+                    // Method A: Line-based Spatial Grouping
+                    const lines: { text: string, y: number }[] = [];
+                    wordList.forEach((word: any) => {
+                        // Reduced threshold from 25 to 10 to prevent merging separate rows
+                        const existingLine = lines.find(l => Math.abs(l.y - word.y) < 10);
+                        if (existingLine) existingLine.text += " " + word.text;
+                        else lines.push({ text: word.text, y: word.y });
+                    });
+
+                    lines.forEach(line => {
+                        const matches = line.text.match(priceRegex);
+                        if (matches) {
+                            // Assume the last match is the price (common in menus: "Burger ... $10")
+                            const price = matches[matches.length - 1];
+                            let name = line.text.replace(price, '').trim();
+
+                            // Cleanup name
+                            name = name.replace(/^[:;,. \-•*]+|[:;,. \-•*]+$/g, '');
+
+                            if (name.length > 2 && !headerKeywords.some(k => name.toLowerCase().includes(k))) {
+                                detectedItems.push({
+                                    name: name,
+                                    price: price,
+                                    ingredients: "Freshly prepared",
+                                    calories: "N/A",
+                                    description: `Delicious ${name}`
+                                });
+                            }
+                        }
+                    });
+
+                    // Method B: Token-Flow Fallback (if line parsing fails)
+                    if (detectedItems.length === 0) {
+                        for (let i = 1; i < wordList.length; i++) {
+                            const current = wordList[i].text;
+                            if (current.match(/^(?:Rs\.?|Rs|NPR|\$|€|£)?\s?\d+(?:[\.,]\d{1,2})?$/i)) {
+                                let name = wordList[i - 1].text;
+                                name = name.replace(/^•|[*\-]/g, '').trim();
+                                if (name.length > 2 && !headerKeywords.includes(name.toLowerCase())) {
+                                    detectedItems.push({
+                                        name: name,
+                                        price: current,
+                                        ingredients: "Freshly sourced.",
+                                        calories: "Estimated 300 kcal",
+                                        description: `Enjoy our fresh ${name}.`
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    // Method C: List-based Fallback (For menus without prices or failed price detection)
+                    if (detectedItems.length === 0) {
+                        console.log("No price-based items found. Using list fallback.");
+                        lines.forEach(line => {
+                            // Check if line contains multiple items separated by bullets/dots/pipes
+                            // Delimiters:  。 | •  . (if surrounded by spaces)
+                            const splitRegex = /[。•|]+|(?:\s{2,})|(?:\s+\.\s+)/;
+
+                            const parts = line.text.split(splitRegex);
+
+                            parts.forEach(part => {
+                                // Aggressive cleaning
+                                let cleanName = part.replace(/^[。•\-\*><\.]+|[。•\-\*><\.]+$/g, '').trim();
+                                cleanName = cleanName.replace(/[0-9]/g, '');
+                                cleanName = cleanName.replace(/^[:;,. ]+|[:;,. ]+$/g, '');
+
+                                const isHeader = headerKeywords.some(k => cleanName.toLowerCase().includes(k)) || cleanName.length < 3;
+
+                                if (cleanName && !isHeader) {
+                                    detectedItems.push({
+                                        name: cleanName,
+                                        price: "Ask for Price",
+                                        ingredients: "Fresh ingredients",
+                                        calories: "N/A",
+                                        description: `Our specialty: ${cleanName}`
+                                    });
+                                }
+                            });
+                        });
+                    }
+
+                    return detectedItems;
+                };
+
+                items = parseItems(rawWords);
+
+                // Final unique filter
+                items = items.filter((item, index, self) =>
+                    index === self.findIndex((t) => t.name === item.name && t.price === item.price)
+                );
+
             } else if (result.words) {
-                extractedText = result.words;
+                extractedText = typeof result.words === 'string' ? result.words : JSON.stringify(result.words);
             }
 
-            if (extractedText) {
+            if (extractedText || items.length > 0) {
+                const newHistoryItem: HistoryItem = {
+                    id: Date.now(),
+                    place: 'Scanned Menu',
+                    date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                    items: items.slice(0, 2).map(i => i.name).join(', ') + (items.length > 2 ? '...' : ''),
+                    total: items.length > 0 ? `${items.length} dishes found` : 'Text only',
+                    scannedItems: items // Store full list
+                };
+
+                setHistoryItems(prev => [newHistoryItem, ...prev]);
+
+                // Persist to Firestore with automatic document creation if missing
+                if (auth.currentUser) {
+                    const userDocRef = doc(db, 'users', auth.currentUser.uid);
+                    await updateDoc(userDocRef, {
+                        history: arrayUnion(newHistoryItem)
+                    }).catch(async (error) => {
+                        // Fallback if document doesn't exist yet
+                        if (error.code === 'not-found') {
+                            await setDoc(userDocRef, {
+                                history: [newHistoryItem],
+                                favorites: []
+                            }, { merge: true });
+                        } else {
+                            console.error("Error saving history:", error);
+                        }
+                    });
+                }
+
                 setFullText(extractedText);
-                setScannedItems([]);
+                setScannedItems(items);
                 setCapturedImage(null);
                 setActiveTab("results");
-                setViewMode('text');
+                // Correctly switch view based on results
+                setViewMode(items.length > 0 ? 'items' : 'text');
             } else {
                 alert("AI could not read the menu. Please try a clearer photo.");
             }
@@ -159,7 +387,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             const context = canvas.getContext('2d');
             if (context) {
                 context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                setCapturedImage(canvas.toDataURL('image/png'));
+                canvas.toBlob(async (blob) => {
+                    if (blob) {
+                        const resizedBlob = await resizeImage(blob);
+                        setImageBlob(resizedBlob);
+                        setCapturedImage(URL.createObjectURL(resizedBlob));
+                    }
+                }, 'image/jpeg', 0.9);
                 stopCamera();
             }
         }
@@ -174,18 +408,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         setIsCameraOpen(false);
     };
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // Cleanup object URLs to prevent memory leaks
+    React.useEffect(() => {
+        return () => {
+            if (capturedImage && capturedImage.startsWith('blob:')) {
+                URL.revokeObjectURL(capturedImage);
+            }
+        };
+    }, [capturedImage]);
+
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const result = reader.result;
-                if (typeof result === 'string') {
-                    setCapturedImage(result);
-                }
-                setShowScanOptions(false);
-            };
-            reader.readAsDataURL(file);
+            const resizedBlob = await resizeImage(file);
+            setImageBlob(resizedBlob);
+            setCapturedImage(URL.createObjectURL(resizedBlob));
+            setShowScanOptions(false);
         }
     };
 
@@ -242,7 +480,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         />
                     )}
                     {activeTab === 'history' && (
-                        <HistoryTab historyItems={historyItems} />
+                        <HistoryTab
+                            historyItems={historyItems}
+                            favoriteItems={favoriteItems}
+                            toggleLike={toggleRecommendedLike}
+                        />
                     )}
                 </main>
 
@@ -283,6 +525,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     <DialogContent className="sm:max-w-md rounded-3xl p-6 border-none">
                         <DialogHeader>
                             <DialogTitle className="text-2xl font-bold">Edit Profile</DialogTitle>
+                            <DialogDescription>Update your personal information and contact details.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-5 py-4">
                             <div className="space-y-2">
@@ -317,7 +560,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             </div>
                         </div>
                         <div className="p-8 pt-12">
-                            <DialogTitle className="text-3xl font-black text-black mb-2">{selectedDish?.name}</DialogTitle>
+                            <DialogHeader className="sr-only">
+                                <DialogTitle>{selectedDish?.name}</DialogTitle>
+                                <DialogDescription>Details about {selectedDish?.name}, including ingredients and price.</DialogDescription>
+                            </DialogHeader>
+                            <h2 className="text-3xl font-black text-black mb-2">{selectedDish?.name}</h2>
                             <div className="text-green-600 text-xl font-bold mb-6">{selectedDish?.price}</div>
 
                             <div className="space-y-6">
@@ -351,6 +598,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
                 <Dialog open={isCameraOpen} onOpenChange={(open) => !open && stopCamera()}>
                     <DialogContent className="max-w-4xl p-0 h-[80vh] bg-black border-none overflow-hidden rounded-3xl">
+                        <DialogHeader className="sr-only">
+                            <DialogTitle>Camera View</DialogTitle>
+                            <DialogDescription>Live camera stream to capture and analyze the menu.</DialogDescription>
+                        </DialogHeader>
                         <div className="relative w-full h-full flex flex-col shadow-2xl">
                             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
                             <canvas ref={canvasRef} style={{ display: 'none' }} />
@@ -398,7 +649,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             <Button onClick={analyzeMenu} disabled={analyzing} className="h-16 rounded-2xl bg-amber-400 text-black hover:bg-amber-500 text-lg font-black shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
                                 {analyzing ? "AI is Reading Menu..." : "Analyze This Menu"}
                             </Button>
-                            <Button variant="ghost" onClick={() => setCapturedImage(null)} disabled={analyzing} className="h-12 text-white/60 hover:text-white font-bold disabled:opacity-50">
+                            <Button variant="ghost" onClick={() => {
+                                setCapturedImage(null);
+                                setImageBlob(null);
+                            }} disabled={analyzing} className="h-12 text-white/60 hover:text-white font-bold disabled:opacity-50">
                                 Retake Photo
                             </Button>
                         </div>
