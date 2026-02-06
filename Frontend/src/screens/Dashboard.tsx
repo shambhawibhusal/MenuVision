@@ -160,190 +160,76 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         });
     };
 
-    // --- ANALYZE MENU ---
+    // --- Helper to convert Blob to Base64 ---
+    const blobToBase64 = (blob: Blob): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    };
+
+    // --- ANALYZE MENU (BACKEND) ---
     const analyzeMenu = async () => {
         if (!imageBlob || analyzing) return;
 
         setAnalyzing(true);
-        console.log("Starting analysis with blob:", {
-            size: (imageBlob.size / 1024).toFixed(2) + " KB",
-            type: imageBlob.type
-        });
-
         try {
-            const formData = new FormData();
-            // Use .jpg for jpeg blobs, .png for others
-            const extension = imageBlob.type === 'image/png' ? 'png' : 'jpg';
-            formData.append('file', imageBlob, `menu.${extension}`);
+            // 1. Convert Blob to Base64 for sending to backend
+            const base64Image = await blobToBase64(imageBlob);
 
-            const response = await fetch('https://api.easyocr.org/ocr', {
+            // 2. Call Backend API
+            const response = await fetch('http://localhost:5000/analyzeMenu', {
                 method: 'POST',
-                body: formData
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    imageUrl: base64Image,
+                    userId: auth.currentUser ? auth.currentUser.uid : 'anonymous'
+                })
             });
 
+            const data = await response.json();
+
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error("OCR API Error Response:", errorText);
-                throw new Error(`OCR API error ${response.status}: ${errorText || 'Unknown error'}`);
+                // Handle specific errors
+                if (response.status === 429) {
+                    throw new Error("Quota limit reached. Please wait a moment.");
+                } else {
+                    throw new Error(data.error || "Failed to analyze menu");
+                }
             }
 
-            const result = await response.json();
-            console.log("OCR Result:", result);
+            console.log("Analysis Result:", data);
 
-            let extractedText = "";
-            let items: ScannedItem[] = [];
+            const items: ScannedItem[] = data.menuItems || [];
+            const extractedText = data.fullText || "";
 
-            if (result.words && Array.isArray(result.words)) {
-                // 1. EXTRACT RAW DATA
-                const rawWords = result.words.map((w: any) => {
-                    let text = "";
-                    let y = 0;
-                    if (typeof w === 'string') {
-                        text = w;
-                    } else if (Array.isArray(w)) {
-                        text = w[1] || "";
-                        if (w[0] && Array.isArray(w[0])) {
-                            y = w[0].reduce((acc: number, pt: any) => acc + (pt[1] || 0), 0) / w[0].length;
-                        }
-                    } else if (w && typeof w === 'object') {
-                        text = w.text || w.word || "";
-                        const box = w.box || w.coords || w.geometry;
-                        if (Array.isArray(box) && box[0]) y = box[0][1] || 0;
-                    }
-                    return { text: text.trim(), y };
-                }).filter((w: any) => w.text.length > 0);
-
-                extractedText = rawWords.map((w: any) => w.text).join(' ');
-
-                // 2. HYBRID PARSING LOGIC
-                const parseItems = (wordList: any[]) => {
-                    const detectedItems: ScannedItem[] = [];
-                    const priceRegex = /(?:Rs\.?|Rs|NPR|\$|€|£)?\s?\d+(?:[\.,\s]\d{1,2})?/gi;
-                    // Refined keywords to prevent filtering valid items like "Tea"
-                    const headerKeywords = ['menu', 'items', 'list', 'page', 'restaurant', 'scanned', '~~~'];
-
-                    // Method A: Line-based Spatial Grouping
-                    const lines: { text: string, y: number }[] = [];
-                    wordList.forEach((word: any) => {
-                        // Reduced threshold from 25 to 10 to prevent merging separate rows
-                        const existingLine = lines.find(l => Math.abs(l.y - word.y) < 10);
-                        if (existingLine) existingLine.text += " " + word.text;
-                        else lines.push({ text: word.text, y: word.y });
-                    });
-
-                    lines.forEach(line => {
-                        const matches = line.text.match(priceRegex);
-                        if (matches) {
-                            // Assume the last match is the price (common in menus: "Burger ... $10")
-                            const price = matches[matches.length - 1];
-                            let name = line.text.replace(price, '').trim();
-
-                            // Cleanup name
-                            name = name.replace(/^[:;,. \-•*]+|[:;,. \-•*]+$/g, '');
-
-                            if (name.length > 2 && !headerKeywords.some(k => name.toLowerCase().includes(k))) {
-                                detectedItems.push({
-                                    name: name,
-                                    price: price,
-                                    ingredients: "Freshly prepared",
-                                    calories: "N/A",
-                                    description: `Delicious ${name}`
-                                });
-                            }
-                        }
-                    });
-
-                    // Method B: Token-Flow Fallback (if line parsing fails)
-                    if (detectedItems.length === 0) {
-                        for (let i = 1; i < wordList.length; i++) {
-                            const current = wordList[i].text;
-                            if (current.match(/^(?:Rs\.?|Rs|NPR|\$|€|£)?\s?\d+(?:[\.,]\d{1,2})?$/i)) {
-                                let name = wordList[i - 1].text;
-                                name = name.replace(/^•|[*\-]/g, '').trim();
-                                if (name.length > 2 && !headerKeywords.includes(name.toLowerCase())) {
-                                    detectedItems.push({
-                                        name: name,
-                                        price: current,
-                                        ingredients: "Freshly sourced.",
-                                        calories: "Estimated 300 kcal",
-                                        description: `Enjoy our fresh ${name}.`
-                                    });
-                                }
-                            }
-                        }
-                    }
-
-                    // Method C: List-based Fallback (For menus without prices or failed price detection)
-                    if (detectedItems.length === 0) {
-                        console.log("No price-based items found. Using list fallback.");
-                        lines.forEach(line => {
-                            // Check if line contains multiple items separated by bullets/dots/pipes
-                            // Delimiters:  。 | •  . (if surrounded by spaces)
-                            const splitRegex = /[。•|]+|(?:\s{2,})|(?:\s+\.\s+)/;
-
-                            const parts = line.text.split(splitRegex);
-
-                            parts.forEach(part => {
-                                // Aggressive cleaning
-                                let cleanName = part.replace(/^[。•\-\*><\.]+|[。•\-\*><\.]+$/g, '').trim();
-                                cleanName = cleanName.replace(/[0-9]/g, '');
-                                cleanName = cleanName.replace(/^[:;,. ]+|[:;,. ]+$/g, '');
-
-                                const isHeader = headerKeywords.some(k => cleanName.toLowerCase().includes(k)) || cleanName.length < 3;
-
-                                if (cleanName && !isHeader) {
-                                    detectedItems.push({
-                                        name: cleanName,
-                                        price: "Ask for Price",
-                                        ingredients: "Fresh ingredients",
-                                        calories: "N/A",
-                                        description: `Our specialty: ${cleanName}`
-                                    });
-                                }
-                            });
-                        });
-                    }
-
-                    return detectedItems;
-                };
-
-                items = parseItems(rawWords);
-
-                // Final unique filter
-                items = items.filter((item, index, self) =>
-                    index === self.findIndex((t) => t.name === item.name && t.price === item.price)
-                );
-
-            } else if (result.words) {
-                extractedText = typeof result.words === 'string' ? result.words : JSON.stringify(result.words);
-            }
-
-            if (extractedText || items.length > 0) {
+            if (items.length > 0) {
                 const newHistoryItem: HistoryItem = {
                     id: Date.now(),
                     place: 'Scanned Menu',
                     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
                     items: items.slice(0, 2).map(i => i.name).join(', ') + (items.length > 2 ? '...' : ''),
-                    total: items.length > 0 ? `${items.length} dishes found` : 'Text only',
-                    scannedItems: items // Store full list
+                    total: `${items.length} dishes found`,
+                    scannedItems: items
                 };
 
                 setHistoryItems(prev => [newHistoryItem, ...prev]);
 
-                // Persist to Firestore with automatic document creation if missing
+                // Persist to Firestore
                 if (auth.currentUser) {
                     const userDocRef = doc(db, 'users', auth.currentUser.uid);
                     await updateDoc(userDocRef, {
                         history: arrayUnion(newHistoryItem)
                     }).catch(async (error) => {
-                        // Fallback if document doesn't exist yet
                         if (error.code === 'not-found') {
                             await setDoc(userDocRef, {
                                 history: [newHistoryItem],
                                 favorites: []
                             }, { merge: true });
-                        } else {
-                            console.error("Error saving history:", error);
                         }
                     });
                 }
@@ -352,13 +238,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 setScannedItems(items);
                 setCapturedImage(null);
                 setActiveTab("results");
-                // Correctly switch view based on results
-                setViewMode(items.length > 0 ? 'items' : 'text');
+                setViewMode('items');
             } else {
-                alert("AI could not read the menu. Please try a clearer photo.");
+                alert("No menu items found. Please try again.");
+                setFullText(extractedText);
+                setActiveTab("results");
+                setViewMode('text');
             }
+
         } catch (err: any) {
-            console.error(err);
+            console.error("Analysis Error:", err);
             alert("Error: " + err.message);
         } finally {
             setAnalyzing(false);
