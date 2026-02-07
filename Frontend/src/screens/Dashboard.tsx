@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Camera, History, User, MessageSquare, Home, Edit, X } from "lucide-react";
+import { Camera, History, User, MessageSquare, Home, Edit, X, Heart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 // Types
@@ -89,6 +89,41 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         } catch (error) {
             console.error("Error updating favorites:", error);
             // Optionally rollback state or show alert
+        }
+    };
+
+    const toggleScannedItemLike = async (item: ScannedItem) => {
+        if (!auth.currentUser) return;
+
+        // Check if item is already in favorites by name (since scanned items don't have IDs initially)
+        const existingFav = favoriteItems.find(fav => fav.name === item.name);
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+
+        try {
+            if (existingFav) {
+                // Remove from favorites
+                setFavoriteItems(prev => prev.filter(fav => fav.id !== existingFav.id));
+                await updateDoc(userDocRef, {
+                    favorites: arrayRemove(existingFav)
+                });
+            } else {
+                // Add to favorites
+                const newDish: Dish = {
+                    id: Date.now(),
+                    name: item.name,
+                    place: 'Scanned Menu',
+                    price: item.price,
+                    calories: item.calories,
+                    ingredients: item.ingredients,
+                    description: item.description
+                };
+                setFavoriteItems(prev => [...prev, newDish]);
+                await updateDoc(userDocRef, {
+                    favorites: arrayUnion(newDish)
+                });
+            }
+        } catch (error) {
+            console.error("Error updating favorites for scanned item:", error);
         }
     };
     // -- Data States
@@ -351,6 +386,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             setSelectedDish={setSelectedDish}
                             fullText={fullText}
                             setActiveTab={setActiveTab}
+                            favoriteItems={favoriteItems}
+                            onToggleLike={toggleScannedItemLike}
                         />
                     )}
                     {activeTab === 'chat' && (
@@ -373,6 +410,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             historyItems={historyItems}
                             favoriteItems={favoriteItems}
                             toggleLike={toggleRecommendedLike}
+                            onSelectHistoryItem={(item) => {
+                                if (item.scannedItems && item.scannedItems.length > 0) {
+                                    setScannedItems(item.scannedItems);
+                                    setActiveTab('results');
+                                    setViewMode('items');
+                                    setFullText(""); // Clear previous text if any, or maybe store text in history too?
+                                } else {
+                                    alert("No detailed items found for this scan.");
+                                }
+                            }}
                         />
                     )}
                 </main>
@@ -453,7 +500,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 <DialogTitle>{selectedDish?.name}</DialogTitle>
                                 <DialogDescription>Details about {selectedDish?.name}, including ingredients and price.</DialogDescription>
                             </DialogHeader>
-                            <h2 className="text-3xl font-black text-black mb-2">{selectedDish?.name}</h2>
+                            <div className="flex justify-between items-start mb-2">
+                                <h2 className="text-3xl font-black text-black">{selectedDish?.name}</h2>
+                                {selectedDish && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-10 w-10 shrink-0 rounded-full hover:bg-gray-100"
+                                        onClick={() => toggleScannedItemLike(selectedDish)}
+                                    >
+                                        <Heart
+                                            size={28}
+                                            className={favoriteItems.some(fav => fav.name === selectedDish.name) ? "fill-red-500 text-red-500" : "text-gray-400"}
+                                        />
+                                    </Button>
+                                )}
+                            </div>
                             <div className="text-green-600 text-xl font-bold mb-6">{selectedDish?.price}</div>
 
                             <div className="space-y-6">

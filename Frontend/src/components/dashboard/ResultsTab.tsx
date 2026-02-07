@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ScannedItem, Tab } from '@/types/dashboard';
+import { ScannedItem, Tab, Dish } from '@/types/dashboard';
 
 interface ResultsTabProps {
     viewMode: 'items' | 'text';
@@ -11,6 +11,8 @@ interface ResultsTabProps {
     setSelectedDish: (item: ScannedItem) => void;
     fullText: string;
     setActiveTab: (t: Tab) => void;
+    favoriteItems: Dish[];
+    onToggleLike: (item: ScannedItem) => void;
 }
 
 import MenuCard from './MenuCard';
@@ -21,7 +23,9 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     scannedItems,
     setSelectedDish,
     fullText,
-    setActiveTab
+    setActiveTab,
+    favoriteItems,
+    onToggleLike
 }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
@@ -34,13 +38,18 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                 <TabsContent value="items" className="mt-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
                         {scannedItems.length === 0 && <p className="text-white/60 text-center py-10 col-span-full">No items found.</p>}
-                        {scannedItems.map((item, index) => (
-                            <MenuCard
-                                key={index}
-                                item={item}
-                                onClick={() => setSelectedDish(item)}
-                            />
-                        ))}
+                        {scannedItems.map((item, index) => {
+                            const isLiked = favoriteItems.some(fav => fav.name === item.name);
+                            return (
+                                <MenuCard
+                                    key={index}
+                                    item={item}
+                                    onClick={() => setSelectedDish(item)}
+                                    isLiked={isLiked}
+                                    onLike={() => onToggleLike(item)}
+                                />
+                            );
+                        })}
                     </div>
                 </TabsContent>
                 <TabsContent value="text" className="mt-6">

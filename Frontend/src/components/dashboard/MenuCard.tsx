@@ -1,13 +1,17 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
+import { Heart } from 'lucide-react';
+import { Button } from "@/components/ui/button";
 
 interface MenuCardProps {
     item: ScannedItem;
     onClick: () => void;
+    isLiked?: boolean;
+    onLike?: () => void;
 }
 
-const MenuCard: React.FC<MenuCardProps> = ({ item, onClick }) => {
+const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike }) => {
     return (
         <Card onClick={onClick} className="cursor-pointer hover:bg-white/10 border-none bg-black/40 backdrop-blur-md text-white transition-all overflow-hidden group relative shadow-lg hover:shadow-amber-400/20 transform hover:-translate-y-1">
             <div className="absolute inset-0 bg-gradient-to-br from-amber-400/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -20,9 +24,24 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick }) => {
                     <CardTitle className="text-xl font-bold leading-tight decoration-amber-400 group-hover:underline decoration-2 underline-offset-4 tracking-tight">
                         {item.name}
                     </CardTitle>
-                    <span className="text-amber-400 font-bold text-lg whitespace-nowrap bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20 shadow-[0_0_10px_rgba(251,191,36,0.2)]">
-                        {item.price}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-amber-400 font-bold text-lg whitespace-nowrap bg-amber-400/10 px-3 py-1 rounded-full border border-amber-400/20 shadow-[0_0_10px_rgba(251,191,36,0.2)]">
+                            {item.price}
+                        </span>
+                        {onLike && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 rounded-full hover:bg-white/20 text-white"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onLike();
+                                }}
+                            >
+                                <Heart size={18} className={isLiked ? "fill-red-500 text-red-500" : ""} />
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="p-5 pt-2 relative z-10">

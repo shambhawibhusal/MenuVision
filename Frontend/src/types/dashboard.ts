@@ -3,6 +3,9 @@ export interface Dish {
     name: string;
     place: string;
     price: string;
+    calories?: string;
+    ingredients?: string;
+    description?: string;
 }
 
 export interface ScannedItem {

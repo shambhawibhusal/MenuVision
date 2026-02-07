@@ -9,9 +9,10 @@ interface HistoryTabProps {
     historyItems: HistoryItem[];
     favoriteItems: Dish[];
     toggleLike: (dish: Dish) => void;
+    onSelectHistoryItem: (item: HistoryItem) => void;
 }
 
-const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike }) => {
+const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
             <h2 className="text-3xl font-bold text-white mb-8">My Activity</h2>
@@ -27,7 +28,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                         <div className="text-center py-20 text-white/40">No history yet.</div>
                     ) : (
                         historyItems.map(item => (
-                            <Card key={item.id} className="bg-white/10 backdrop-blur-md border-none text-white hover:bg-white/15 transition-all cursor-pointer overflow-hidden relative">
+                            <Card
+                                key={item.id}
+                                onClick={() => onSelectHistoryItem(item)}
+                                className="bg-white/10 backdrop-blur-md border-none text-white hover:bg-white/15 transition-all cursor-pointer overflow-hidden relative"
+                            >
                                 <div className="w-1.5 h-full bg-amber-400 absolute left-0 top-0" />
                                 <CardContent className="p-5 pl-7">
                                     <div className="flex justify-between items-start mb-2">
