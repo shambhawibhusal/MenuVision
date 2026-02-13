@@ -351,21 +351,43 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
-    const sendMessage = () => {
+    const sendMessage = async () => {
         if (!chatInput.trim()) return;
-        setChatMessages([...chatMessages, { id: Date.now(), text: chatInput, sender: 'user' }]);
+
+        const userMsg: ChatMessage = { id: Date.now(), text: chatInput, sender: 'user' };
+        setChatMessages(prev => [...prev, userMsg]);
         setChatInput('');
 
-        setTimeout(() => {
-            setChatMessages(prev => [...prev, { id: Date.now() + 1, text: "I can help you choose dishes 🍽️", sender: 'bot' }]);
-        }, 800);
+        // Temporary loading message
+        const loadingMsgId = Date.now() + 1;
+        setChatMessages(prev => [...prev, { id: loadingMsgId, text: "Thinking...", sender: 'bot' }]);
+
+        try {
+            const response = await fetch('http://localhost:5000/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: chatInput })
+            });
+
+            const data = await response.json();
+
+            setChatMessages(prev => prev.map(msg =>
+                msg.id === loadingMsgId ? { ...msg, text: data.reply || "I'm having trouble connecting right now." } : msg
+            ));
+
+        } catch (error) {
+            console.error("Chat Error:", error);
+            setChatMessages(prev => prev.map(msg =>
+                msg.id === loadingMsgId ? { ...msg, text: "Sorry, I couldn't reach the server." } : msg
+            ));
+        }
     };
 
     return (
-        <div className="w-screen h-screen flex items-center justify-center bg-[#1a1a1a]">
+        <div className="w-screen h-screen flex items-center justify-center">
             <div className={containerStyle + " flex flex-col shadow-2xl relative overflow-hidden"}>
                 <img src={foodBackground} alt="bg" className="absolute w-full h-full object-cover z-[1] opacity-70" />
-                <div className="absolute w-full h-full bg-gradient-to-b from-black/80 via-black/40 to-black/90 z-[2]"></div>
+                <div className="absolute w-full h-full z-[2]"></div>
 
                 <main className="flex-1 overflow-y-auto z-[3] relative custom-scrollbar">
                     {activeTab === 'home' && (

@@ -112,6 +112,38 @@ app.post("/analyzeMenu", async (req, res) => {
     }
 });
 
+app.post("/chat", async (req, res) => {
+    try {
+        const { message } = req.body;
+        if (!message) throw new Error("Message is required");
+
+        const prompt = `
+        You are a helpful food expert AI. 
+        User asked: "${message}"
+        
+        If the user asks about a specific food item, provide:
+        1. A brief description of the food.
+        2. Its origin/history.
+        3. Approximate calories (if applicable).
+        
+        Keep the response concise and friendly.
+        If the user's message is not related to food, politely steer them back to food topics.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: createUserContent([prompt]),
+        });
+
+        const text = response.text || "I couldn't generate a response.";
+        res.json({ success: true, reply: text });
+
+    } catch (err) {
+        console.error("Chat Error:", err);
+        res.status(500).json({ success: false, error: "Failed to get AI response" });
+    }
+});
+
 app.listen(5000, () => {
     console.log("✅ Backend running on http://localhost:5000");
 });

@@ -36,8 +36,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     <TabsTrigger value="text" className="rounded-md data-[state=active]:bg-amber-400 data-[state=active]:text-black">Full Text</TabsTrigger>
                 </TabsList>
                 <TabsContent value="items" className="mt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
-                        {scannedItems.length === 0 && <p className="text-white/60 text-center py-10 col-span-full">No items found.</p>}
+                    <div className="flex flex-col gap-4 pb-20">
+                        {scannedItems.length === 0 && <p className="text-white/60 text-center py-10 w-full">No items found.</p>}
                         {scannedItems.map((item, index) => {
                             const isLiked = favoriteItems.some(fav => fav.name === item.name);
                             return (
