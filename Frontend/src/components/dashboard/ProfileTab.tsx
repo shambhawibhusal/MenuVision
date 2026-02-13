@@ -9,18 +9,20 @@ import { User } from 'firebase/auth';
 
 interface ProfileTabProps {
     user: User | null;
+    phoneNumber?: string;
     setShowEditProfile: (v: boolean) => void;
     onLogout: () => void;
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
     user,
+    phoneNumber,
     setShowEditProfile,
     onLogout
 }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
-            <h2 className="text-3xl font-bold text-white mb-8">My Profile</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-8">My Profile</h2>
             <Card className="bg-white rounded-3xl overflow-hidden shadow-xl border-none">
                 <CardHeader className="flex flex-col items-center pt-10 pb-6 bg-gradient-to-b from-gray-50 to-white">
                     <Avatar className="w-24 h-24 border-4 border-white shadow-lg">
@@ -31,6 +33,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                     </Avatar>
                     <CardTitle className="mt-4 text-2xl font-bold">{user?.displayName || 'Guest User'}</CardTitle>
                     <CardDescription className="text-gray-500">{user?.email || 'guest@example.com'}</CardDescription>
+                    {phoneNumber && <CardDescription className="text-gray-400 font-medium">{phoneNumber}</CardDescription>}
                 </CardHeader>
                 <Separator />
                 <CardContent className="p-6 space-y-4">

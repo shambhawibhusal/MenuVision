@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
-import foodBackground from '../assets/food.png';
+import { updateProfile } from 'firebase/auth';
 import { containerStyle } from '../utils/styles';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
+    const [phoneNumber, setPhoneNumber] = useState('');
+
+    // -- Profile Edit State
+    const [showEditProfile, setShowEditProfile] = useState(false);
+    const [editName, setEditName] = useState('');
+    const [editPhone, setEditPhone] = useState('');
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
 
     // -- Fetch User Data from Firestore
     React.useEffect(() => {
@@ -56,6 +63,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     const data = userDoc.data();
                     if (data.favorites) setFavoriteItems(data.favorites);
                     if (data.history) setHistoryItems(data.history);
+                    if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
                 } else {
                     // Initialize user document if it doesn't exist
                     await setDoc(userDocRef, { favorites: [], history: [] });
@@ -139,8 +147,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     ]);
     const [chatInput, setChatInput] = useState('');
 
-    // -- Profile Edit State
-    const [showEditProfile, setShowEditProfile] = useState(false);
+    // -- Profile Edit State - Moved up
+    // const [showEditProfile, setShowEditProfile] = useState(false);
 
     // -- Recommended Dishes Data
     const [recommendedDishes] = useState<Dish[]>([
@@ -383,12 +391,53 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
+    const handleOpenEditProfile = () => {
+        setEditName(auth.currentUser?.displayName || '');
+        setEditPhone(phoneNumber || '');
+        setShowEditProfile(true);
+    };
+
+    const handleSaveProfile = async () => {
+        if (!auth.currentUser) return;
+        setIsSavingProfile(true);
+
+        try {
+            // 1. Update Display Name in Auth
+            if (editName !== auth.currentUser.displayName) {
+                await updateProfile(auth.currentUser, {
+                    displayName: editName
+                });
+            }
+
+            // 2. Update Phone Number (and extra details) in Firestore
+            const userDocRef = doc(db, 'users', auth.currentUser.uid);
+            await setDoc(userDocRef, {
+                phoneNumber: editPhone
+            }, { merge: true });
+
+            // 3. Update Local State
+            setPhoneNumber(editPhone);
+
+            // 4. Close Dialog
+            setShowEditProfile(false);
+
+            // Force re-render of profile by updating user object reference if needed, 
+            // but auth.currentUser updates usually reflect. 
+            // We might need to reload the page or trigger a state update to see the name change immediately in some parts of the app 
+            // if they rely purely on the initial user object. 
+            // For now, let's rely on React's state updates.
+
+        } catch (error) {
+            console.error("Error saving profile:", error);
+            alert("Failed to save profile. Please try again.");
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
+
     return (
         <div className="w-screen h-screen flex items-center justify-center">
             <div className={containerStyle + " flex flex-col shadow-2xl relative overflow-hidden"}>
-                <img src={foodBackground} alt="bg" className="absolute w-full h-full object-cover z-[1] opacity-70" />
-                <div className="absolute w-full h-full z-[2]"></div>
-
                 <main className="flex-1 overflow-y-auto z-[3] relative custom-scrollbar">
                     {activeTab === 'home' && (
                         <HomeTab
@@ -423,7 +472,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     {activeTab === 'profile' && (
                         <ProfileTab
                             user={auth.currentUser}
-                            setShowEditProfile={setShowEditProfile}
+                            phoneNumber={phoneNumber}
+                            setShowEditProfile={handleOpenEditProfile}
                             onLogout={onLogout}
                         />
                     )}
@@ -488,16 +538,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <div className="grid gap-5 py-4">
                             <div className="space-y-2">
                                 <Label>Full Name</Label>
-                                <Input placeholder="John Doe" className="h-12 rounded-xl" />
+                                <Input
+                                    placeholder="John Doe"
+                                    className="h-12 rounded-xl"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label>Phone Number</Label>
-                                <Input placeholder="98XXXXXXXX" className="h-12 rounded-xl" />
+                                <Input
+                                    placeholder="98XXXXXXXX"
+                                    className="h-12 rounded-xl"
+                                    value={editPhone}
+                                    onChange={(e) => setEditPhone(e.target.value)}
+                                />
                             </div>
                         </div>
                         <DialogFooter className="flex sm:flex-row gap-2">
-                            <Button onClick={() => setShowEditProfile(false)} className="flex-1 h-12 rounded-xl bg-black font-bold">Save Changes</Button>
-                            <Button variant="outline" onClick={() => setShowEditProfile(false)} className="flex-1 h-12 rounded-xl border-gray-200 font-bold">Cancel</Button>
+                            <Button onClick={handleSaveProfile} disabled={isSavingProfile} className="flex-1 h-12 rounded-xl bg-black font-bold">
+                                {isSavingProfile ? "Saving..." : "Save Changes"}
+                            </Button>
+                            <Button variant="outline" onClick={() => setShowEditProfile(false)} disabled={isSavingProfile} className="flex-1 h-12 rounded-xl border-gray-200 font-bold">Cancel</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>

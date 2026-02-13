@@ -25,12 +25,12 @@ const HomeTab: React.FC<HomeTabProps> = ({
     return (
         <div className="p-5 pt-8 animate-fade">
             <div className="relative mb-8 group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 group-focus-within:text-amber-400 transition-colors" size={20} />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-amber-500 transition-colors" size={20} />
                 <Input
                     placeholder="Search for dishes..."
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
-                    className="h-14 pl-12 bg-white/10 border-white/20 text-white placeholder:text-white/40 rounded-2xl focus-visible:ring-amber-400 focus-visible:ring-offset-0 transition-all text-lg"
+                    className="h-14 pl-12 bg-white border-gray-200 text-gray-900 placeholder:text-gray-400 rounded-2xl focus-visible:ring-amber-500 focus-visible:ring-offset-0 transition-all text-lg shadow-sm"
                 />
             </div>
 
@@ -52,15 +52,15 @@ const HomeTab: React.FC<HomeTabProps> = ({
             </Card>
 
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-white text-xl font-bold px-1">Recommended for You</h3>
-                <span className="text-amber-400 text-sm font-medium">View All</span>
+                <h3 className="text-gray-900 text-xl font-bold px-1">Recommended for You</h3>
+                <span className="text-amber-600 text-sm font-medium hover:underline cursor-pointer">View All</span>
             </div>
 
             <div className="flex flex-col gap-4">
                 {filteredDishes.map(dish => {
                     const isLiked = favoriteItems.some(fav => fav.id === dish.id);
                     return (
-                        <Card key={dish.id} className="bg-white/95 border-none shadow-sm rounded-2xl overflow-hidden active:scale-[0.98] transition-all">
+                        <Card key={dish.id} className="bg-white border border-gray-100 shadow-sm rounded-2xl overflow-hidden active:scale-[0.98] transition-all hover:shadow-md">
                             <CardContent className="p-4 flex justify-between items-center">
                                 <div className="space-y-1">
                                     <h3 className="text-base font-bold text-black">{dish.name}</h3>

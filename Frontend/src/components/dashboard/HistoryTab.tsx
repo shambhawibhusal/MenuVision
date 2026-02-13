@@ -15,32 +15,32 @@ interface HistoryTabProps {
 const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
-            <h2 className="text-3xl font-bold text-white mb-8">My Activity</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-8">My Activity</h2>
 
             <Tabs defaultValue="history" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-white/10 border border-white/10 h-12 p-1 mb-8">
-                    <TabsTrigger value="history" className="rounded-md data-[state=active]:bg-amber-400 data-[state=active]:text-black text-white">Scan History</TabsTrigger>
-                    <TabsTrigger value="favorites" className="rounded-md data-[state=active]:bg-amber-400 data-[state=active]:text-black text-white">Favorite Dishes</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200 h-12 p-1 mb-8 rounded-xl">
+                    <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm text-gray-500 font-medium transition-all">Scan History</TabsTrigger>
+                    <TabsTrigger value="favorites" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm text-gray-500 font-medium transition-all">Favorite Dishes</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="history" className="space-y-4">
                     {historyItems.length === 0 ? (
-                        <div className="text-center py-20 text-white/40">No history yet.</div>
+                        <div className="text-center py-20 text-gray-400">No history yet.</div>
                     ) : (
                         historyItems.map(item => (
                             <Card
                                 key={item.id}
                                 onClick={() => onSelectHistoryItem(item)}
-                                className="bg-white/10 backdrop-blur-md border-none text-white hover:bg-white/15 transition-all cursor-pointer overflow-hidden relative"
+                                className="bg-white border border-gray-100 text-gray-900 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden relative rounded-2xl"
                             >
                                 <div className="w-1.5 h-full bg-amber-400 absolute left-0 top-0" />
                                 <CardContent className="p-5 pl-7">
                                     <div className="flex justify-between items-start mb-2">
                                         <h4 className="text-lg font-bold">{item.place}</h4>
-                                        <span className="text-[10px] uppercase tracking-widest bg-white/10 px-2 py-0.5 rounded">{item.date}</span>
+                                        <span className="text-[10px] uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200">{item.date}</span>
                                     </div>
-                                    <p className="text-sm text-white/50 mb-3">{item.items}</p>
-                                    <div className="text-xl font-bold text-amber-400">{item.total}</div>
+                                    <p className="text-sm text-gray-500 mb-3 line-clamp-2">{item.items}</p>
+                                    <div className="text-xl font-bold text-amber-500">{item.total}</div>
                                 </CardContent>
                             </Card>
                         ))
@@ -49,7 +49,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
 
                 <TabsContent value="favorites" className="space-y-4">
                     {favoriteItems.length === 0 ? (
-                        <div className="text-center py-20 text-white/40">No favorite dishes yet.</div>
+                        <div className="text-center py-20 text-gray-400">No favorite dishes yet.</div>
                     ) : (
                         favoriteItems.map(dish => (
                             <Card key={dish.id} className="bg-white/95 border-none shadow-sm rounded-2xl overflow-hidden active:scale-[0.98] transition-all">

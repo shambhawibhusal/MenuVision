@@ -29,15 +29,15 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
 }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
-            <h2 className="text-3xl font-bold text-white mb-6">Analysis Results</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-6">Analysis Results</h2>
             <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as any)} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-black/40 border border-white/20 h-12 p-1">
-                    <TabsTrigger value="items" className="rounded-md data-[state=active]:bg-amber-400 data-[state=active]:text-black">Menu Items</TabsTrigger>
-                    <TabsTrigger value="text" className="rounded-md data-[state=active]:bg-amber-400 data-[state=active]:text-black">Full Text</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200 h-12 p-1 rounded-xl">
+                    <TabsTrigger value="items" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm transition-all font-medium">Menu Items</TabsTrigger>
+                    <TabsTrigger value="text" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm transition-all font-medium">Full Text</TabsTrigger>
                 </TabsList>
                 <TabsContent value="items" className="mt-6">
                     <div className="flex flex-col gap-4 pb-20">
-                        {scannedItems.length === 0 && <p className="text-white/60 text-center py-10 w-full">No items found.</p>}
+                        {scannedItems.length === 0 && <p className="text-gray-500 text-center py-10 w-full">No items found.</p>}
                         {scannedItems.map((item, index) => {
                             const isLiked = favoriteItems.some(fav => fav.name === item.name);
                             return (
@@ -53,8 +53,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     </div>
                 </TabsContent>
                 <TabsContent value="text" className="mt-6">
-                    <Card className="bg-white/10 backdrop-blur-md border-none text-white">
-                        <CardContent className="p-6 whitespace-pre-wrap max-h-[50vh] overflow-y-auto leading-relaxed">
+                    <Card className="bg-white border border-gray-200 shadow-sm text-gray-900 rounded-2xl">
+                        <CardContent className="p-6 whitespace-pre-wrap max-h-[50vh] overflow-y-auto leading-relaxed text-sm">
                             {fullText || "No text extracted."}
                         </CardContent>
                     </Card>
