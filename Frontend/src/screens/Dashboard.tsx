@@ -43,6 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
     const [phoneNumber, setPhoneNumber] = useState('');
+    const [restaurantName, setRestaurantName] = useState('');
 
     // -- Profile Edit State
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -253,7 +254,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             if (items.length > 0) {
                 const newHistoryItem: HistoryItem = {
                     id: Date.now(),
-                    place: 'Scanned Menu',
+                    place: restaurantName || 'Scanned Menu',
                     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
                     items: items.slice(0, 2).map(i => i.name).join(', ') + (items.length > 2 ? '...' : ''),
                     total: `${items.length} dishes found`,
@@ -280,6 +281,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 setFullText(extractedText);
                 setScannedItems(items);
                 setCapturedImage(null);
+                setRestaurantName('');
                 setActiveTab("results");
                 setViewMode('items');
             } else {
@@ -681,12 +683,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             </CardContent>
                         </Card>
                         <div className="flex flex-col gap-4 mt-12 w-full max-w-sm">
+                            <Input
+                                placeholder="Restaurant Name (optional)"
+                                value={restaurantName}
+                                onChange={(e) => setRestaurantName(e.target.value)}
+                                className="h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-2xl text-lg backdrop-blur-md"
+                            />
                             <Button onClick={analyzeMenu} disabled={analyzing} className="h-16 rounded-2xl bg-amber-400 text-black hover:bg-amber-500 text-lg font-black shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
-                                {analyzing ? "AI is Reading Menu..." : "Analyze This Menu"}
+                                {analyzing ? "Reading Menu..." : "Analyze This Menu"}
                             </Button>
                             <Button variant="ghost" onClick={() => {
                                 setCapturedImage(null);
                                 setImageBlob(null);
+                                setRestaurantName('');
                             }} disabled={analyzing} className="h-12 text-white/60 hover:text-white font-bold disabled:opacity-50">
                                 Retake Photo
                             </Button>

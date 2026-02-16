@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import {
-    signInWithPhoneNumber,
-    EmailAuthProvider,
-    linkWithCredential,
+    createUserWithEmailAndPassword,
     updateProfile,
-    RecaptchaVerifier
+    GoogleAuthProvider,
+    signInWithPopup
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import foodBackground from '../assets/food.png';
 import BackButton from '../components/BackButton';
@@ -15,23 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog"
 
-import { User, ConfirmationResult } from 'firebase/auth';
 
-declare global {
-    interface Window {
-        recaptchaVerifier: RecaptchaVerifier;
-        confirmationResult: ConfirmationResult;
-    }
-}
+import { User } from 'firebase/auth';
 
 interface SignupScreenProps {
     onBack: () => void;
@@ -40,12 +25,39 @@ interface SignupScreenProps {
 
 const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) => {
     const [formData, setFormData] = useState({ email: '', fullname: '', phone: '', password: '', confirmPassword: '' });
-    const [otp, setOtp] = useState('');
+
     const [error, setError] = useState('');
-    const [showOtpPopup, setShowOtpPopup] = useState(false);
     const [loading, setLoading] = useState(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+    const handleGoogleSignup = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const provider = new GoogleAuthProvider();
+            const result = await signInWithPopup(auth, provider);
+            const user = result.user;
+
+            const userDocRef = doc(db, "users", user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (!userDoc.exists()) {
+                await setDoc(userDocRef, {
+                    uid: user.uid,
+                    fullname: user.displayName || 'Unknown',
+                    email: user.email,
+                    phone: user.phoneNumber || '',
+                    createdAt: new Date()
+                });
+            }
+            onSignupSuccess(user);
+        } catch (err: any) {
+            console.error(err);
+            setLoading(false);
+            setError(err.message);
+        }
+    };
 
     const handleSignupClick = async () => {
         const { email, fullname, phone, password, confirmPassword } = formData;
@@ -57,47 +69,26 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
         setLoading(true); setError('');
 
         try {
-            if (!window.recaptchaVerifier) {
-                window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-                    'size': 'invisible',
-                    'callback': () => { }
-                });
-            }
-            const formattedPhoneNumber = `+977${phone}`;
-            const appVerifier = window.recaptchaVerifier;
-            const confirmationResult = await signInWithPhoneNumber(auth, formattedPhoneNumber, appVerifier);
-            window.confirmationResult = confirmationResult;
-            setLoading(false); setShowOtpPopup(true); alert(`OTP sent to ${formattedPhoneNumber}`);
-        } catch (err: any) {
-            console.error(err); setLoading(false);
-            if (err.code === 'auth/invalid-phone-number') setError('Invalid phone format. Add country code (e.g., +91).');
-            else setError(err.message);
-        }
-    };
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
 
-    const handleVerifyOtp = async () => {
-        if (otp.length !== 6) { alert('Please enter 6-digit OTP'); return; }
-        setLoading(true);
-        try {
-            const phoneCredential = await window.confirmationResult.confirm(otp);
-            const user = phoneCredential.user;
-            const credential = EmailAuthProvider.credential(formData.email, formData.password);
-
-            try {
-                await linkWithCredential(user, credential);
-            } catch (linkError: any) {
-                if (linkError.code !== 'auth/provider-already-linked') throw linkError;
-            }
-
-            await updateProfile(user, { displayName: formData.fullname });
+            await updateProfile(user, { displayName: fullname });
             await setDoc(doc(db, "users", user.uid), {
-                uid: user.uid, fullname: formData.fullname, email: formData.email, phone: formData.phone, createdAt: new Date()
+                uid: user.uid, fullname: fullname, email: email, phone: phone, createdAt: new Date()
             });
             onSignupSuccess(user);
         } catch (err: any) {
-            console.error(err); setLoading(false); alert('Verification Failed: ' + err.message);
+            console.error(err);
+            setLoading(false);
+            if (err.code === 'auth/email-already-in-use') {
+                setError('Email is already in use.');
+            } else {
+                setError(err.message);
+            }
         }
     };
+
+
 
     return (
         <div className="w-screen h-screen flex items-center justify-center bg-gray-300">
@@ -145,39 +136,32 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
                             >
                                 {loading ? 'Processing...' : 'Sign Up'}
                             </Button>
+
+                            <div className="relative my-4 w-full">
+                                <div className="absolute inset-0 flex items-center">
+                                    <span className="w-full border-t border-gray-300" />
+                                </div>
+                                <div className="relative flex justify-center text-xs uppercase">
+                                    <span className="bg-white/95 px-2 text-gray-500 rounded">Or continue with</span>
+                                </div>
+                            </div>
+
+                            <Button
+                                variant="outline"
+                                onClick={handleGoogleSignup}
+                                disabled={loading}
+                                className="w-full h-11 rounded-full border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-bold transition-all hover:scale-[1.02]"
+                            >
+                                <svg className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
+                                    <path fill="currentColor" d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"></path>
+                                </svg>
+                                Continue with Google
+                            </Button>
                         </CardFooter>
                     </Card>
                 </div>
 
-                <Dialog open={showOtpPopup} onOpenChange={setShowOtpPopup}>
-                    <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle className="text-xl font-bold text-center">Verify Phone Number</DialogTitle>
-                            <DialogDescription className="text-center">
-                                Enter the 6-digit code sent to <br /><span className="font-bold text-black">+977 {formData.phone}</span>
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="flex items-center justify-center py-4">
-                            <Input
-                                type="number"
-                                placeholder="123456"
-                                value={otp}
-                                onChange={(e) => setOtp(e.target.value)}
-                                className="h-14 text-2xl text-center tracking-[10px] font-bold border-2"
-                            />
-                        </div>
-                        <DialogFooter className="flex flex-col sm:flex-col gap-2">
-                            <Button onClick={handleVerifyOtp} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold h-12">
-                                {loading ? 'Verifying...' : 'Verify Code'}
-                            </Button>
-                            <Button variant="ghost" onClick={() => setShowOtpPopup(false)} className="text-red-600 hover:bg-red-50 hover:text-red-700">
-                                Cancel
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
 
-                <div id="recaptcha-container"></div>
             </div>
         </div>
     );
