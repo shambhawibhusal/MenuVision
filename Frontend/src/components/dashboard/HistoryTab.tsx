@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { HistoryItem, Dish } from '@/types/dashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Heart, Home } from 'lucide-react';
+import { Heart, Home, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface HistoryTabProps {
@@ -36,7 +36,14 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                                 <div className="w-1.5 h-full bg-amber-400 absolute left-0 top-0" />
                                 <CardContent className="p-5 pl-7">
                                     <div className="flex justify-between items-start mb-2">
-                                        <h4 className="text-lg font-bold">{item.place}</h4>
+                                        <div>
+                                            <h4 className="text-lg font-bold">{item.place}</h4>
+                                            {item.location && (
+                                                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                                    <MapPin size={10} /> {item.location}
+                                                </p>
+                                            )}
+                                        </div>
                                         <span className="text-[10px] uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200">{item.date}</span>
                                     </div>
                                     <p className="text-sm text-gray-500 mb-3 line-clamp-2">{item.items}</p>

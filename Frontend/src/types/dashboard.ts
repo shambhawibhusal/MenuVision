@@ -19,6 +19,7 @@ export interface ScannedItem {
 export interface HistoryItem {
     id: number;
     place: string;
+    location?: string;
     date: string;
     items: string;
     total: string;

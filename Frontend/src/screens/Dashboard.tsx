@@ -44,6 +44,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [restaurantName, setRestaurantName] = useState('');
+    const [restaurantLocation, setRestaurantLocation] = useState('');
 
     // -- Profile Edit State
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -62,12 +63,30 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
                 if (userDoc.exists()) {
                     const data = userDoc.data();
-                    if (data.favorites) setFavoriteItems(data.favorites);
-                    if (data.history) setHistoryItems(data.history);
-                    if (data.phoneNumber) setPhoneNumber(data.phoneNumber);
+                    setFavoriteItems(data.favorites || []);
+                    setHistoryItems(data.history || []);
+                    setPhoneNumber(data.phoneNumber || '');
+
+                    // -- Field Repair: If name or email are missing, update them from Auth data
+                    const updates: any = {};
+                    if (!data.fullname && auth.currentUser.displayName) updates.fullname = auth.currentUser.displayName;
+                    if (!data.email && auth.currentUser.email) updates.email = auth.currentUser.email;
+                    if (!data.uid) updates.uid = auth.currentUser.uid;
+
+                    if (Object.keys(updates).length > 0) {
+                        console.log("Repairing user document fields:", updates);
+                        await updateDoc(userDocRef, updates);
+                    }
                 } else {
-                    // Initialize user document if it doesn't exist
-                    await setDoc(userDocRef, { favorites: [], history: [] });
+                    // Initialize user document if it doesn't exist, safely merging with what Auth might have provided
+                    await setDoc(userDocRef, {
+                        uid: auth.currentUser.uid,
+                        fullname: auth.currentUser.displayName || 'Guest User',
+                        email: auth.currentUser.email || '',
+                        favorites: [],
+                        history: [],
+                        createdAt: new Date()
+                    }, { merge: true });
                 }
             } catch (error) {
                 console.error("Error fetching user data:", error);
@@ -80,14 +99,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const toggleRecommendedLike = async (dish: Dish) => {
         if (!auth.currentUser) return;
 
-        const isFav = favoriteItems.some(item => item.id === dish.id);
+        const existingFav = favoriteItems.find(item => item.id === dish.id);
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
 
         try {
-            if (isFav) {
+            if (existingFav) {
+                // If it exists, use the stored object for arrayRemove to ensure exact field matching
                 setFavoriteItems(prev => prev.filter(item => item.id !== dish.id));
                 await updateDoc(userDocRef, {
-                    favorites: arrayRemove(dish)
+                    favorites: arrayRemove(existingFav)
                 });
             } else {
                 setFavoriteItems(prev => [...prev, dish]);
@@ -97,34 +117,30 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             }
         } catch (error) {
             console.error("Error updating favorites:", error);
-            // Optionally rollback state or show alert
         }
     };
 
     const toggleScannedItemLike = async (item: ScannedItem) => {
         if (!auth.currentUser) return;
 
-        // Check if item is already in favorites by name (since scanned items don't have IDs initially)
         const existingFav = favoriteItems.find(fav => fav.name === item.name);
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
 
         try {
             if (existingFav) {
-                // Remove from favorites
-                setFavoriteItems(prev => prev.filter(fav => fav.id !== existingFav.id));
+                setFavoriteItems(prev => prev.filter(fav => fav.name !== item.name));
                 await updateDoc(userDocRef, {
                     favorites: arrayRemove(existingFav)
                 });
             } else {
-                // Add to favorites
                 const newDish: Dish = {
                     id: Date.now(),
                     name: item.name,
                     place: 'Scanned Menu',
-                    price: item.price,
-                    calories: item.calories,
-                    ingredients: item.ingredients,
-                    description: item.description
+                    price: item.price || null,
+                    calories: item.calories || null,
+                    ingredients: item.ingredients || null,
+                    description: item.description || null
                 };
                 setFavoriteItems(prev => [...prev, newDish]);
                 await updateDoc(userDocRef, {
@@ -135,6 +151,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             console.error("Error updating favorites for scanned item:", error);
         }
     };
+
     // -- Data States
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [fullText, setFullText] = useState('');
@@ -255,6 +272,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 const newHistoryItem: HistoryItem = {
                     id: Date.now(),
                     place: restaurantName || 'Scanned Menu',
+                    location: restaurantLocation || '',
                     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
                     items: items.slice(0, 2).map(i => i.name).join(', ') + (items.length > 2 ? '...' : ''),
                     total: `${items.length} dishes found`,
@@ -282,6 +300,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 setScannedItems(items);
                 setCapturedImage(null);
                 setRestaurantName('');
+                setRestaurantLocation('');
                 setActiveTab("results");
                 setViewMode('items');
             } else {
@@ -682,13 +701,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 <img src={capturedImage} alt="Preview" className="w-full rounded-3xl shadow-2xl border border-white/10" />
                             </CardContent>
                         </Card>
-                        <div className="flex flex-col gap-4 mt-12 w-full max-w-sm">
-                            <Input
-                                placeholder="Restaurant Name (optional)"
-                                value={restaurantName}
-                                onChange={(e) => setRestaurantName(e.target.value)}
-                                className="h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-2xl text-lg backdrop-blur-md"
-                            />
+                        <div className="flex flex-col gap-3 mt-12 w-full max-w-sm">
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input
+                                    placeholder="Restaurant Name"
+                                    value={restaurantName}
+                                    onChange={(e) => setRestaurantName(e.target.value)}
+                                    className="h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-2xl text-lg backdrop-blur-md"
+                                />
+                                <Input
+                                    placeholder="Location"
+                                    value={restaurantLocation}
+                                    onChange={(e) => setRestaurantLocation(e.target.value)}
+                                    className="h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-2xl text-lg backdrop-blur-md"
+                                />
+                            </div>
                             <Button onClick={analyzeMenu} disabled={analyzing} className="h-16 rounded-2xl bg-amber-400 text-black hover:bg-amber-500 text-lg font-black shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
                                 {analyzing ? "Reading Menu..." : "Analyze This Menu"}
                             </Button>
@@ -696,6 +723,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 setCapturedImage(null);
                                 setImageBlob(null);
                                 setRestaurantName('');
+                                setRestaurantLocation('');
                             }} disabled={analyzing} className="h-12 text-white/60 hover:text-white font-bold disabled:opacity-50">
                                 Retake Photo
                             </Button>
@@ -708,4 +736,3 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 }
 
 export default Dashboard;
-

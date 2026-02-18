@@ -5,7 +5,7 @@ import {
     GoogleAuthProvider,
     signInWithPopup
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import foodBackground from '../assets/food.png';
 import BackButton from '../components/BackButton';
@@ -40,17 +40,15 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
             const user = result.user;
 
             const userDocRef = doc(db, "users", user.uid);
-            const userDoc = await getDoc(userDocRef);
+            // Always merge metadata, even if doc exists, to ensure profile is complete (Field Repair)
+            await setDoc(userDocRef, {
+                uid: user.uid,
+                fullname: user.displayName || 'Unknown',
+                email: user.email,
+                phoneNumber: user.phoneNumber || '',
+                createdAt: new Date()
+            }, { merge: true });
 
-            if (!userDoc.exists()) {
-                await setDoc(userDocRef, {
-                    uid: user.uid,
-                    fullname: user.displayName || 'Unknown',
-                    email: user.email,
-                    phone: user.phoneNumber || '',
-                    createdAt: new Date()
-                });
-            }
             onSignupSuccess(user);
         } catch (err: any) {
             console.error(err);
@@ -74,8 +72,14 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
 
             await updateProfile(user, { displayName: fullname });
             await setDoc(doc(db, "users", user.uid), {
-                uid: user.uid, fullname: fullname, email: email, phone: phone, createdAt: new Date()
-            });
+                uid: user.uid,
+                fullname: fullname,
+                email: email,
+                phoneNumber: phone,
+                createdAt: new Date(),
+                favorites: [],
+                history: []
+            }, { merge: true });
             onSignupSuccess(user);
         } catch (err: any) {
             console.error(err);
