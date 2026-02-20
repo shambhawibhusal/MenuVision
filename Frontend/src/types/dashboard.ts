@@ -30,6 +30,7 @@ export interface ChatMessage {
     id: number;
     text: string;
     sender: 'user' | 'bot';
+    imageUrl?: string | null;
 }
 
 export type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history';

@@ -7,23 +7,15 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 
-import {
-    GoogleGenAI,
-    Part,
-} from "@google/genai";
+import { google } from "@ai-sdk/google";
+import { generateObject, streamText, generateText } from "ai";
+import { z } from "zod";
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-const apiKey = process.env.GEMINI_API_KEY;
-if (!apiKey) {
-    console.error("Error: GEMINI_API_KEY is not defined in .env");
-    process.exit(1);
-}
-
-const ai = new GoogleGenAI({ apiKey });
-const modelName = "gemini-2.5-flash-lite";
+const model = google("gemini-2.5-flash-lite");
 
 interface ParsedImage {
     mimeType: string;
@@ -45,26 +37,24 @@ function parseBase64Image(input: string): ParsedImage {
     return { mimeType, base64 };
 }
 
-interface MenuData {
-    fullText: string;
-    menuItems: MenuItem[];
-}
+const FoodItemSchema = z.object({
+    name: z.string(),
+    description: z.string().nullable(),
+    price: z.string().nullable(),
+    category: z.string().nullable(),
+    ingredients: z.array(z.string()),
+    allergens: z.array(z.string()),
+    calories: z.number().nullable(),
+    origin: z.string().nullable(),
+    isVegan: z.boolean().nullable(),
+    isVegetarian: z.boolean().nullable(),
+    isGlutenFree: z.boolean().nullable(),
+});
 
-interface MenuItem {
-    name: string;
-    price: string | null;
-    description: string | null;
-}
-
-function extractJsonObject(text: string): MenuData {
-    // Robust “find the outermost JSON object” approach
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start === -1 || end === -1 || end <= start) {
-        throw new Error("AI response did not contain a JSON object");
-    }
-    return JSON.parse(text.slice(start, end + 1));
-}
+const MenuSchema = z.object({
+    fullText: z.string(),
+    menuItems: z.array(FoodItemSchema)
+});
 
 interface AnalyzeMenuRequestBody {
     imageUrl?: string;
@@ -72,8 +62,6 @@ interface AnalyzeMenuRequestBody {
 }
 
 app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, res: Response) => {
-    let tempFilePath: string | undefined;
-
     try {
         const imageInput = req.body.imageUrl || req.body.imageBase64;
         if (!imageInput) {
@@ -81,54 +69,29 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
         }
         const { mimeType, base64 } = parseBase64Image(imageInput);
 
-        const buffer = Buffer.from(base64, "base64");
-        const ext = (mimeType.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "");
-        tempFilePath = path.join(os.tmpdir(), `menu_${Date.now()}.${ext}`);
-
-        await fs.writeFile(tempFilePath, buffer);
-
-        // Upload file (mimeType is set via `config`) [web:2]
-        const uploaded = await ai.files.upload({
-            file: tempFilePath,
-            config: { mimeType },
-        });
-
-        if (!uploaded?.uri || !uploaded?.mimeType) {
-            throw new Error("Upload succeeded but returned no uri/mimeType");
-        }
-
-        const promptText = [
-            "Act as an OCR menu scanner.",
-            'Return ONLY valid JSON: { "fullText": string, "menuItems": array }.',
-            'Each menu item: { "name": string, "price": string|null, "description": string|null }.',
-            "Extract every visible menu item; do not include markdown fences.",
-        ].join("\n");
-
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents: [
+        const { object } = await generateObject({
+            model: model,
+            schema: MenuSchema,
+            system: "Act as an OCR menu scanner and extract all visible menu items.",
+            messages: [
                 {
-                    role: 'user',
-                    parts: [
-                        { text: promptText },
-                        { fileData: { fileUri: uploaded.uri, mimeType: uploaded.mimeType } }
-                    ]
-                }
+                    role: "user",
+                    content: [
+                        { type: "text", text: "Extract every visible menu item into JSON." },
+                        { type: "image", image: `data:${mimeType};base64,${base64}` },
+                    ],
+                },
             ],
         });
 
-        const text = (typeof (response as any).text === "function" ? (response as any).text() : (response as any).text) || "";
-        const data = extractJsonObject(text);
-
         res.json({
             success: true,
-            fullText: data.fullText ?? "",
-            menuItems: Array.isArray(data.menuItems) ? data.menuItems : [],
+            fullText: object.fullText ?? "",
+            menuItems: object.menuItems,
         });
     } catch (err: any) {
         const message = err?.message || "Unknown error";
-        const status =
-            message.includes("429") ? 429 : message.includes("404") ? 404 : 500;
+        const status = message.includes("429") ? 429 : message.includes("404") ? 404 : 500;
 
         res.status(status).json({
             success: false,
@@ -137,12 +100,6 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
                     ? "AI Quota reached. Please wait and try again."
                     : message,
         });
-    } finally {
-        if (tempFilePath) {
-            try {
-                await fs.unlink(tempFilePath);
-            } catch (_) { }
-        }
     }
 });
 
@@ -155,35 +112,58 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         const { message } = req.body;
         if (!message) throw new Error("Message is required");
 
-        const prompt = `
-        You are a helpful food expert AI. 
-        User asked: "${message}"
-        
-        If the user asks about a specific food item, provide:
-        1. A brief description of the food.
-        2. Its origin/history.
-        3. Approximate calories (if applicable).
-        
-        Keep the response concise and friendly.
-        If the user's message is not related to food, politely steer them back to food topics.
-        `;
-
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents: [
-                {
-                    role: 'user',
-                    parts: [{ text: prompt }]
-                }
-            ]
+        const { text } = await generateText({
+            model: model,
+            system: "You are a helpful food expert AI. Provide detailed information about the requested food item. You MUST return ONLY a JSON object that strictly follows the provided schema. Do not include any other text, markdown blocks, or explanations.",
+            prompt: `Return information for "${message}" strictly according to this JSON schema:
+            {
+                "name": "string",
+                "description": "string or null",
+                "price": "string or null",
+                "category": "string or null",
+                "ingredients": ["string"],
+                "allergens": ["string"],
+                "calories": "number or null",
+                "origin": "string or null",
+                "isVegan": "boolean or null",
+                "isVegetarian": "boolean or null",
+                "isGlutenFree": "boolean or null"
+            }`,
         });
 
-        const text = (typeof (response as any).text === "function" ? (response as any).text() : (response as any).text) || "I couldn't generate a response.";
-        res.json({ success: true, reply: text });
+        // Extract JSON from potential markdown blocks
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        const jsonContent = jsonMatch ? jsonMatch[0] : text;
+        const object = JSON.parse(jsonContent);
 
-    } catch (err) {
+        // Fetch a dish image from Unsplash
+        let imageUrl: string | null = null;
+        try {
+            const dishName = object.name || message;
+            const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
+            if (unsplashKey) {
+                const unsplashRes = await fetch(
+                    `https://api.unsplash.com/search/photos?query=${encodeURIComponent(dishName + " food")}&per_page=1&orientation=landscape`,
+                    { headers: { Authorization: `Client-ID ${unsplashKey}` } }
+                );
+                if (unsplashRes.ok) {
+                    const unsplashData = await unsplashRes.json() as { results: Array<{ urls: { regular: string } }> };
+                    imageUrl = unsplashData.results?.[0]?.urls?.regular ?? null;
+                }
+            }
+        } catch (imgErr) {
+            console.warn("Unsplash fetch failed (non-fatal):", imgErr);
+        }
+
+        res.json({
+            success: true,
+            imageUrl,
+            data: object
+        });
+
+    } catch (err: any) {
         console.error("Chat Error:", err);
-        res.status(500).json({ success: false, error: "Failed to get AI response" });
+        res.status(500).json({ success: false, error: err?.message || "Failed to get AI response" });
     }
 });
 

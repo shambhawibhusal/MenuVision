@@ -36,9 +36,26 @@ const ChatTab: React.FC<ChatTabProps> = ({
                 {chatMessages.map(msg => (
                     <div key={msg.id} className={`max-w-[85%] flex ${msg.sender === 'user' ? 'justify-end ml-auto' : 'justify-start mr-auto'}`}>
                         <div className={`p-4 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.sender === 'user'
-                            ? 'bg-black text-white rounded-tr-none'
+                            ? 'bg-white text-white rounded-tr-none'
                             : 'bg-white text-black border border-gray-100 rounded-tl-none'
                             }`}>
+                            {msg.sender === 'bot' && msg.imageUrl && (
+                                <div className="mb-3 -mx-1">
+                                    <img
+                                        src={msg.imageUrl}
+                                        alt="Dish"
+                                        className="w-full rounded-xl object-cover max-h-44 transition-opacity duration-300"
+                                        style={{ opacity: 1 }}
+                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                    />
+                                    <p className="text-[10px] text-gray-400 mt-1 text-right">
+                                        Photo via{' '}
+                                        <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+                                            Unsplash
+                                        </a>
+                                    </p>
+                                </div>
+                            )}
                             <div className="prose prose-sm max-w-none dark:prose-invert">
                                 <ReactMarkdown
                                     remarkPlugins={[remarkGfm, remarkBreaks]}

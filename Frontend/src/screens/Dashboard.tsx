@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { ChatMessage } from '@/types/dashboard';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
@@ -19,7 +20,7 @@ import { Camera, History, User, MessageSquare, Home, Edit, X, Heart } from "luci
 import { Card, CardContent } from "@/components/ui/card";
 
 // Types
-import { Dish, ScannedItem, HistoryItem, ChatMessage, Tab } from '@/types/dashboard';
+import { Dish, ScannedItem, HistoryItem, Tab } from '@/types/dashboard';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -137,10 +138,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     id: Date.now(),
                     name: item.name,
                     place: 'Scanned Menu',
-                    price: item.price || null,
-                    calories: item.calories || null,
-                    ingredients: item.ingredients || null,
-                    description: item.description || null
+                    price: item.price || '',
+                    calories: item.calories || undefined,
+                    ingredients: item.ingredients || undefined,
+                    description: item.description || undefined
                 };
                 setFavoriteItems(prev => [...prev, newDish]);
                 await updateDoc(userDocRef, {
@@ -159,9 +160,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
     const [searchText, setSearchText] = useState('');
 
-    // -- Chat State
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-        { id: 1, text: "Hello! I am your Menu AI. Ask me about food.", sender: 'bot' }
+        { id: 1, text: "Hello! I am your Menu AI. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
     ]);
     const [chatInput, setChatInput] = useState('');
 
@@ -381,34 +381,35 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
 
     const sendMessage = async () => {
-        if (!chatInput.trim()) return;
+        const trimmed = chatInput.trim();
+        if (!trimmed) return;
 
-        const userMsg: ChatMessage = { id: Date.now(), text: chatInput, sender: 'user' };
+        const userMsg: ChatMessage = { id: Date.now(), text: trimmed, sender: 'user' };
         setChatMessages(prev => [...prev, userMsg]);
         setChatInput('');
-
-        // Temporary loading message
-        const loadingMsgId = Date.now() + 1;
-        setChatMessages(prev => [...prev, { id: loadingMsgId, text: "Thinking...", sender: 'bot' }]);
 
         try {
             const response = await fetch('http://localhost:5000/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: chatInput })
+                body: JSON.stringify({ message: trimmed }),
             });
-
             const data = await response.json();
-
-            setChatMessages(prev => prev.map(msg =>
-                msg.id === loadingMsgId ? { ...msg, text: data.reply || "I'm having trouble connecting right now." } : msg
-            ));
-
-        } catch (error) {
-            console.error("Chat Error:", error);
-            setChatMessages(prev => prev.map(msg =>
-                msg.id === loadingMsgId ? { ...msg, text: "Sorry, I couldn't reach the server." } : msg
-            ));
+            const replyText = data.success && data.data
+                ? Object.entries(data.data)
+                    .map(([k, v]) => `**${k}**: ${Array.isArray(v) ? (v as string[]).join(', ') : v ?? 'N/A'}`)
+                    .join('\n')
+                : (data.error || 'Sorry, I could not get a response.');
+            const botMsg: ChatMessage = {
+                id: Date.now() + 1,
+                text: replyText,
+                sender: 'bot',
+                imageUrl: data.imageUrl ?? null,
+            };
+            setChatMessages(prev => [...prev, botMsg]);
+        } catch {
+            const botMsg: ChatMessage = { id: Date.now() + 1, text: 'Sorry, there was an error connecting to the AI.', sender: 'bot' };
+            setChatMessages(prev => [...prev, botMsg]);
         }
     };
 
