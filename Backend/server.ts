@@ -49,6 +49,7 @@ const FoodItemSchema = z.object({
     isVegan: z.boolean().nullable(),
     isVegetarian: z.boolean().nullable(),
     isGlutenFree: z.boolean().nullable(),
+    imageUrl: z.string().nullable().optional(),
 });
 
 const MenuSchema = z.object({
@@ -59,6 +60,32 @@ const MenuSchema = z.object({
 interface AnalyzeMenuRequestBody {
     imageUrl?: string;
     imageBase64?: string;
+}
+
+async function fetchPexelsImage(dishName: string): Promise<string | null> {
+    const pexelsKey = process.env.PEXELS_API_KEY;
+    console.log(`[Pexels] Fetching image for: "${dishName}", Key exists: ${!!pexelsKey}`);
+    if (!pexelsKey) return null;
+
+    try {
+        const pexelsRes = await fetch(
+            `https://api.pexels.com/v1/search?query=${encodeURIComponent(dishName + " food")}&per_page=1&orientation=landscape`,
+            { headers: { Authorization: pexelsKey } }
+        );
+        console.log(`[Pexels] Response status for "${dishName}": ${pexelsRes.status}`);
+        if (pexelsRes.ok) {
+            const pexelsData = await pexelsRes.json() as { photos: Array<{ src: { medium: string } }> };
+            const url = pexelsData.photos?.[0]?.src?.medium ?? null;
+            console.log(`[Pexels] Image URL for "${dishName}": ${url}`);
+            return url;
+        } else {
+            const errorText = await pexelsRes.text();
+            console.warn(`[Pexels] Error response: ${errorText}`);
+        }
+    } catch (err) {
+        console.warn(`Pexels fetch failed for "${dishName}":`, err);
+    }
+    return null;
 }
 
 app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, res: Response) => {
@@ -84,10 +111,17 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
             ],
         });
 
+        const menuItemsWithImages = await Promise.all(
+            object.menuItems.map(async (item) => ({
+                ...item,
+                imageUrl: await fetchPexelsImage(item.name),
+            }))
+        );
+
         res.json({
             success: true,
             fullText: object.fullText ?? "",
-            menuItems: object.menuItems,
+            menuItems: menuItemsWithImages,
         });
     } catch (err: any) {
         const message = err?.message || "Unknown error";
@@ -140,19 +174,19 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         let imageUrl: string | null = null;
         try {
             const dishName = object.name || message;
-            const unsplashKey = process.env.UNSPLASH_ACCESS_KEY;
-            if (unsplashKey) {
-                const unsplashRes = await fetch(
-                    `https://api.unsplash.com/search/photos?query=${encodeURIComponent(dishName + " food")}&per_page=1&orientation=landscape`,
-                    { headers: { Authorization: `Client-ID ${unsplashKey}` } }
+            const pexelsKey = process.env.PEXELS_API_KEY;
+            if (pexelsKey) {
+                const pexelsRes = await fetch(
+                    `https://api.pexels.com/v1/search?query=${encodeURIComponent(dishName + " food")}&per_page=1&orientation=landscape`,
+                    { headers: { Authorization: pexelsKey } }
                 );
-                if (unsplashRes.ok) {
-                    const unsplashData = await unsplashRes.json() as { results: Array<{ urls: { regular: string } }> };
-                    imageUrl = unsplashData.results?.[0]?.urls?.regular ?? null;
+                if (pexelsRes.ok) {
+                    const pexelsData = await pexelsRes.json() as { photos: Array<{ src: { medium: string } }> };
+                    imageUrl = pexelsData.photos?.[0]?.src?.medium ?? null;
                 }
             }
         } catch (imgErr) {
-            console.warn("Unsplash fetch failed (non-fatal):", imgErr);
+            console.warn("Pexels fetch failed (non-fatal):", imgErr);
         }
 
         res.json({

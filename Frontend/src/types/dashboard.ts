@@ -6,6 +6,11 @@ export interface Dish {
     calories?: string;
     ingredients?: string;
     description?: string;
+    category?: string;
+    cuisine?: string;
+    tags?: string[];
+    priceRange?: 'budget' | 'moderate' | 'expensive';
+    imageUrl?: string | null;
 }
 
 export interface ScannedItem {
@@ -14,6 +19,7 @@ export interface ScannedItem {
     calories?: string;
     ingredients?: string;
     description?: string;
+    imageUrl?: string | null;
 }
 
 export interface HistoryItem {

@@ -17,6 +17,12 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
             <div className="absolute inset-0 bg-gradient-to-r from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
             <div className="flex flex-col sm:flex-row sm:items-center h-full relative z-10">
+                {item.imageUrl && (
+                    <div className="w-full sm:w-28 h-32 sm:h-24 shrink-0 overflow-hidden">
+                        <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                    </div>
+                )}
+
                 <div className="flex-1 p-5 pb-2 sm:pb-5 sm:pr-2">
                     <div className="flex justify-between items-start gap-4 mb-2">
                         <CardTitle className="text-xl font-bold leading-tight decoration-amber-400 group-hover:underline decoration-2 underline-offset-4 tracking-tight text-gray-900">

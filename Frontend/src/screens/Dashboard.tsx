@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { ChatMessage } from '@/types/dashboard';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
@@ -22,6 +22,9 @@ import { Card, CardContent } from "@/components/ui/card";
 // Types
 import { Dish, ScannedItem, HistoryItem, Tab } from '@/types/dashboard';
 
+// Utils
+import { getRecommendations } from '../utils/recommendations';
+
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
 import ResultsTab from '@/components/dashboard/ResultsTab';
@@ -43,6 +46,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
+    const [unlikedDishIds, setUnlikedDishIds] = useState<number[]>([]);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [restaurantName, setRestaurantName] = useState('');
     const [restaurantLocation, setRestaurantLocation] = useState('');
@@ -67,6 +71,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     setFavoriteItems(data.favorites || []);
                     setHistoryItems(data.history || []);
                     setPhoneNumber(data.phoneNumber || '');
+                    setUnlikedDishIds(data.unliked || []);
 
                     // -- Field Repair: If name or email are missing, update them from Auth data
                     const updates: any = {};
@@ -85,6 +90,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         fullname: auth.currentUser.displayName || 'Guest User',
                         email: auth.currentUser.email || '',
                         favorites: [],
+                        unliked: [],
                         history: [],
                         createdAt: new Date()
                     }, { merge: true });
@@ -105,13 +111,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
         try {
             if (existingFav) {
-                // If it exists, use the stored object for arrayRemove to ensure exact field matching
                 setFavoriteItems(prev => prev.filter(item => item.id !== dish.id));
+                setUnlikedDishIds(prev => [...prev, dish.id]);
                 await updateDoc(userDocRef, {
-                    favorites: arrayRemove(existingFav)
+                    favorites: arrayRemove(existingFav),
+                    unliked: arrayUnion(dish.id)
                 });
             } else {
                 setFavoriteItems(prev => [...prev, dish]);
+                setUnlikedDishIds(prev => prev.filter(id => id !== dish.id));
                 await updateDoc(userDocRef, {
                     favorites: arrayUnion(dish)
                 });
@@ -130,9 +138,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         try {
             if (existingFav) {
                 setFavoriteItems(prev => prev.filter(fav => fav.name !== item.name));
-                await updateDoc(userDocRef, {
-                    favorites: arrayRemove(existingFav)
-                });
+                if (existingFav.id) {
+                    setUnlikedDishIds(prev => [...prev, existingFav.id]);
+                    await updateDoc(userDocRef, {
+                        favorites: arrayRemove(existingFav),
+                        unliked: arrayUnion(existingFav.id)
+                    });
+                } else {
+                    await updateDoc(userDocRef, {
+                        favorites: arrayRemove(existingFav)
+                    });
+                }
             } else {
                 const newDish: Dish = {
                     id: Date.now(),
@@ -153,6 +169,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
+    const deleteHistoryItem = async (item: HistoryItem) => {
+        if (!auth.currentUser) return;
+
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+
+        try {
+            setHistoryItems(prev => prev.filter(i => i.id !== item.id));
+            await updateDoc(userDocRef, {
+                history: arrayRemove(item)
+            });
+        } catch (error) {
+            console.error("Error deleting history item:", error);
+        }
+    };
+
     // -- Data States
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [fullText, setFullText] = useState('');
@@ -168,12 +199,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     // -- Profile Edit State - Moved up
     // const [showEditProfile, setShowEditProfile] = useState(false);
 
-    // -- Recommended Dishes Data
-    const [recommendedDishes] = useState<Dish[]>([
-        { id: 101, name: 'Spicy Ramen', place: 'Ichiraku Ramen', price: 'Rs. 450' },
-        { id: 102, name: 'Cheese Pizza', place: 'Pizza Hut', price: 'Rs. 800' },
-        { id: 103, name: 'Chicken MoMo', place: 'Everest MoMo', price: 'Rs. 250' },
-    ]);
+    const recommendedDishes = useMemo(() => {
+        return getRecommendations(favoriteItems, unlikedDishIds, 10);
+    }, [favoriteItems, unlikedDishIds]);
 
     const filteredDishes = recommendedDishes.filter(dish =>
         dish.name.toLowerCase().includes(searchText.toLowerCase())
@@ -264,6 +292,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             }
 
             console.log("Analysis Result:", data);
+            console.log("Menu items with images:", data.menuItems?.map((item: any) => ({ name: item.name, imageUrl: item.imageUrl })));
 
             const items: ScannedItem[] = data.menuItems || [];
             const extractedText = data.fullText || "";
@@ -504,6 +533,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             historyItems={historyItems}
                             favoriteItems={favoriteItems}
                             toggleLike={toggleRecommendedLike}
+                            onDeleteHistoryItem={deleteHistoryItem}
                             onSelectHistoryItem={(item) => {
                                 if (item.scannedItems && item.scannedItems.length > 0) {
                                     setScannedItems(item.scannedItems);
@@ -589,6 +619,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <Dialog open={!!selectedDish} onOpenChange={() => setSelectedDish(null)}>
                     <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
                         <div className="h-32 bg-amber-400 relative">
+                            {selectedDish?.imageUrl ? (
+                                <img src={selectedDish.imageUrl} alt={selectedDish.name} className="w-full h-full object-cover" />
+                            ) : null}
                             <Button
                                 variant="ghost"
                                 size="icon"
