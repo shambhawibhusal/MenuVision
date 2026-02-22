@@ -40,3 +40,34 @@ export interface ChatMessage {
 }
 
 export type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history';
+
+export const ALLERGENS = [
+    'Dairy',
+    'Eggs',
+    'Fish',
+    'Shellfish',
+    'Tree Nuts',
+    'Peanuts',
+    'Wheat',
+    'Soy',
+    'Sesame',
+    'Sulfites'
+] as const;
+
+export type Allergen = typeof ALLERGENS[number];
+
+export interface FoodProfile {
+    isVegetarian: boolean;
+    isVegan: boolean;
+    isGlutenFree: boolean;
+    allergens: Allergen[];
+    onboardingCompleted: boolean;
+}
+
+export const DEFAULT_FOOD_PROFILE: FoodProfile = {
+    isVegetarian: false,
+    isVegan: false,
+    isGlutenFree: false,
+    allergens: [],
+    onboardingCompleted: false
+};

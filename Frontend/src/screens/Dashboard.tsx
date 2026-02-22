@@ -16,11 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Camera, History, User, MessageSquare, Home, Edit, X, Heart } from "lucide-react";
+import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-// Types
-import { Dish, ScannedItem, HistoryItem, Tab } from '@/types/dashboard';
+import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE } from '@/types/dashboard';
 
 // Utils
 import { getRecommendations } from '../utils/recommendations';
@@ -44,20 +43,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [imageBlob, setImageBlob] = useState<Blob | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
 
-    const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
     const [unlikedDishIds, setUnlikedDishIds] = useState<number[]>([]);
     const [phoneNumber, setPhoneNumber] = useState('');
     const [restaurantName, setRestaurantName] = useState('');
     const [restaurantLocation, setRestaurantLocation] = useState('');
+    const [foodProfile, setFoodProfile] = useState<FoodProfile>(DEFAULT_FOOD_PROFILE);
 
-    // -- Profile Edit State
     const [showEditProfile, setShowEditProfile] = useState(false);
     const [editName, setEditName] = useState('');
     const [editPhone, setEditPhone] = useState('');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-    // -- Fetch User Data from Firestore
+const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
+    const [editFoodProfile, setEditFoodProfile] = useState<FoodProfile>(DEFAULT_FOOD_PROFILE);
+    const [isSavingFoodProfile, setIsSavingFoodProfile] = useState(false);
+
     React.useEffect(() => {
         const fetchUserData = async () => {
             if (!auth.currentUser) return;
@@ -72,8 +74,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     setHistoryItems(data.history || []);
                     setPhoneNumber(data.phoneNumber || '');
                     setUnlikedDishIds(data.unliked || []);
+                    setFoodProfile(data.foodProfile || DEFAULT_FOOD_PROFILE);
 
-                    // -- Field Repair: If name or email are missing, update them from Auth data
                     const updates: any = {};
                     if (!data.fullname && auth.currentUser.displayName) updates.fullname = auth.currentUser.displayName;
                     if (!data.email && auth.currentUser.email) updates.email = auth.currentUser.email;
@@ -84,7 +86,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         await updateDoc(userDocRef, updates);
                     }
                 } else {
-                    // Initialize user document if it doesn't exist, safely merging with what Auth might have provided
                     await setDoc(userDocRef, {
                         uid: auth.currentUser.uid,
                         fullname: auth.currentUser.displayName || 'Guest User',
@@ -92,6 +93,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         favorites: [],
                         unliked: [],
                         history: [],
+                        foodProfile: DEFAULT_FOOD_PROFILE,
                         createdAt: new Date()
                     }, { merge: true });
                 }
@@ -195,9 +197,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         { id: 1, text: "Hello! I am your Menu AI. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
     ]);
     const [chatInput, setChatInput] = useState('');
-
-    // -- Profile Edit State - Moved up
-    // const [showEditProfile, setShowEditProfile] = useState(false);
 
     const recommendedDishes = useMemo(() => {
         return getRecommendations(favoriteItems, unlikedDishIds, 10);
@@ -448,41 +447,81 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         setShowEditProfile(true);
     };
 
-    const handleSaveProfile = async () => {
+const handleSaveProfile = async () => {
         if (!auth.currentUser) return;
         setIsSavingProfile(true);
 
         try {
-            // 1. Update Display Name in Auth
             if (editName !== auth.currentUser.displayName) {
                 await updateProfile(auth.currentUser, {
                     displayName: editName
                 });
             }
 
-            // 2. Update Phone Number (and extra details) in Firestore
             const userDocRef = doc(db, 'users', auth.currentUser.uid);
             await setDoc(userDocRef, {
                 phoneNumber: editPhone
             }, { merge: true });
 
-            // 3. Update Local State
             setPhoneNumber(editPhone);
-
-            // 4. Close Dialog
             setShowEditProfile(false);
-
-            // Force re-render of profile by updating user object reference if needed, 
-            // but auth.currentUser updates usually reflect. 
-            // We might need to reload the page or trigger a state update to see the name change immediately in some parts of the app 
-            // if they rely purely on the initial user object. 
-            // For now, let's rely on React's state updates.
 
         } catch (error) {
             console.error("Error saving profile:", error);
             alert("Failed to save profile. Please try again.");
         } finally {
             setIsSavingProfile(false);
+        }
+    };
+
+    const handleOpenEditFoodProfile = () => {
+        setEditFoodProfile({ ...foodProfile });
+        setShowEditFoodProfile(true);
+    };
+
+    const toggleEditDietary = (key: 'isVegetarian' | 'isVegan' | 'isGlutenFree') => {
+        setEditFoodProfile(prev => {
+            const newValue = !prev[key];
+            if (key === 'isVegan' && newValue) {
+                return { ...prev, isVegan: true, isVegetarian: true };
+            }
+            if (key === 'isVegetarian' && !newValue && prev.isVegan) {
+                return { ...prev, isVegetarian: false, isVegan: false };
+            }
+            return { ...prev, [key]: newValue };
+        });
+    };
+
+    const toggleEditAllergen = (allergen: Allergen) => {
+        setEditFoodProfile(prev => ({
+            ...prev,
+            allergens: prev.allergens.includes(allergen)
+                ? prev.allergens.filter(a => a !== allergen)
+                : [...prev.allergens, allergen]
+        }));
+    };
+
+    const handleSaveFoodProfile = async () => {
+        if (!auth.currentUser) return;
+        setIsSavingFoodProfile(true);
+
+        try {
+            const userDocRef = doc(db, 'users', auth.currentUser.uid);
+            await setDoc(userDocRef, {
+                foodProfile: {
+                    ...editFoodProfile,
+                    onboardingCompleted: true
+                }
+            }, { merge: true });
+
+            setFoodProfile(editFoodProfile);
+            setShowEditFoodProfile(false);
+
+        } catch (error) {
+            console.error("Error saving food profile:", error);
+            alert("Failed to save food preferences. Please try again.");
+        } finally {
+            setIsSavingFoodProfile(false);
         }
     };
 
@@ -520,11 +559,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             sendMessage={sendMessage}
                         />
                     )}
-                    {activeTab === 'profile' && (
+{activeTab === 'profile' && (
                         <ProfileTab
                             user={auth.currentUser}
                             phoneNumber={phoneNumber}
+                            foodProfile={foodProfile}
                             setShowEditProfile={handleOpenEditProfile}
+                            setShowEditFoodProfile={handleOpenEditFoodProfile}
                             onLogout={onLogout}
                         />
                     )}
@@ -612,6 +653,105 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 {isSavingProfile ? "Saving..." : "Save Changes"}
                             </Button>
                             <Button variant="outline" onClick={() => setShowEditProfile(false)} disabled={isSavingProfile} className="flex-1 h-12 rounded-xl border-gray-200 font-bold">Cancel</Button>
+                        </DialogFooter>
+                    </DialogContent>
+</Dialog>
+
+                <Dialog open={showEditFoodProfile} onOpenChange={setShowEditFoodProfile}>
+                    <DialogContent className="sm:max-w-md rounded-3xl p-6 border-none max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-bold">Edit Food Preferences</DialogTitle>
+                            <DialogDescription>Update your dietary preferences and food allergens.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-5 py-4">
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Dietary Preferences</Label>
+                                <div className="space-y-2">
+                                    <button
+                                        onClick={() => toggleEditDietary('isVegetarian')}
+                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                                            editFoodProfile.isVegetarian
+                                                ? 'border-green-500 bg-green-50'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                            editFoodProfile.isVegetarian ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+                                        }`}>
+                                            <Leaf size={20} />
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <div className="font-semibold text-gray-900">Vegetarian</div>
+                                        </div>
+                                        {editFoodProfile.isVegetarian && <Check size={18} className="text-green-500" />}
+                                    </button>
+
+                                    <button
+                                        onClick={() => toggleEditDietary('isVegan')}
+                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                                            editFoodProfile.isVegan
+                                                ? 'border-green-500 bg-green-50'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                            editFoodProfile.isVegan ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+                                        }`}>
+                                            <span className="text-lg">🌱</span>
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <div className="font-semibold text-gray-900">Vegan</div>
+                                        </div>
+                                        {editFoodProfile.isVegan && <Check size={18} className="text-green-500" />}
+                                    </button>
+
+                                    <button
+                                        onClick={() => toggleEditDietary('isGlutenFree')}
+                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
+                                            editFoodProfile.isGlutenFree
+                                                ? 'border-amber-500 bg-amber-50'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                        }`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                            editFoodProfile.isGlutenFree ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500'
+                                        }`}>
+                                            <Wheat size={20} />
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <div className="font-semibold text-gray-900">Gluten-Free</div>
+                                        </div>
+                                        {editFoodProfile.isGlutenFree && <Check size={18} className="text-amber-500" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <div className="space-y-3">
+                                <Label className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Food Allergens</Label>
+                                <div className="flex flex-wrap gap-2">
+                                    {ALLERGENS.map((allergen) => (
+                                        <button
+                                            key={allergen}
+                                            onClick={() => toggleEditAllergen(allergen)}
+                                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                                editFoodProfile.allergens.includes(allergen)
+                                                    ? 'bg-red-500 text-white'
+                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                            }`}
+                                        >
+                                            {allergen}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <DialogFooter className="flex sm:flex-row gap-2">
+                            <Button onClick={handleSaveFoodProfile} disabled={isSavingFoodProfile} className="flex-1 h-12 rounded-xl bg-black font-bold">
+                                {isSavingFoodProfile ? "Saving..." : "Save Changes"}
+                            </Button>
+                            <Button variant="outline" onClick={() => setShowEditFoodProfile(false)} disabled={isSavingFoodProfile} className="flex-1 h-12 rounded-xl border-gray-200 font-bold">Cancel</Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
