@@ -1,9 +1,9 @@
 import React from 'react';
-import { Search, Camera, Home, Heart } from "lucide-react";
+import { Search, Camera } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dish } from '@/types/dashboard';
+import MenuCard from './MenuCard';
 
 interface HomeTabProps {
     searchText: string;
@@ -12,6 +12,7 @@ interface HomeTabProps {
     filteredDishes: Dish[];
     favoriteItems: Dish[];
     toggleRecommendedLike: (dish: Dish) => void;
+    onSelectDish: (dish: Dish) => void;
 }
 
 const HomeTab: React.FC<HomeTabProps> = ({
@@ -20,7 +21,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
     setShowScanOptions,
     filteredDishes,
     favoriteItems,
-    toggleRecommendedLike
+    toggleRecommendedLike,
+    onSelectDish
 }) => {
     return (
         <div className="p-5 pt-8 animate-fade">
@@ -60,25 +62,13 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 {filteredDishes.map(dish => {
                     const isLiked = favoriteItems.some(fav => fav.id === dish.id);
                     return (
-                        <Card key={dish.id} className="bg-white border border-gray-100 shadow-sm rounded-2xl overflow-hidden active:scale-[0.98] transition-all hover:shadow-md">
-                            <CardContent className="p-4 flex justify-between items-center">
-                                <div className="space-y-1">
-                                    <h3 className="text-base font-bold text-black">{dish.name}</h3>
-                                    <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
-                                        <Home size={12} /> {dish.place}
-                                    </p>
-                                    <div className="text-green-600 font-bold text-lg mt-1">{dish.price}</div>
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => toggleRecommendedLike(dish)}
-                                    className={`rounded-full hover:bg-gray-100 ${isLiked ? 'text-red-500' : 'text-gray-300'}`}
-                                >
-                                    <Heart size={24} fill={isLiked ? "currentColor" : "none"} />
-                                </Button>
-                            </CardContent>
-                        </Card>
+                        <MenuCard
+                            key={dish.id}
+                            item={dish}
+                            onClick={() => onSelectDish(dish)}
+                            isLiked={isLiked}
+                            onLike={() => toggleRecommendedLike(dish)}
+                        />
                     );
                 })}
             </div>

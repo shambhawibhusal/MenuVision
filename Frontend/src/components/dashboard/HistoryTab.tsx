@@ -2,8 +2,9 @@ import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { HistoryItem, Dish } from '@/types/dashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Heart, Home, MapPin, Trash2 } from 'lucide-react';
+import { MapPin, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import MenuCard from './MenuCard';
 
 interface HistoryTabProps {
     historyItems: HistoryItem[];
@@ -11,9 +12,10 @@ interface HistoryTabProps {
     toggleLike: (dish: Dish) => void;
     onSelectHistoryItem: (item: HistoryItem) => void;
     onDeleteHistoryItem: (item: HistoryItem) => void;
+    onSelectFavorite: (dish: Dish) => void;
 }
 
-const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem }) => {
+const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
             <h2 className="text-3xl font-bold text-gray-900 mb-8">My Activity</h2>
@@ -74,25 +76,13 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                         <div className="text-center py-20 text-gray-400">No favorite dishes yet.</div>
                     ) : (
                         favoriteItems.map(dish => (
-                            <Card key={dish.id} className="bg-white/95 border-none shadow-sm rounded-2xl overflow-hidden active:scale-[0.98] transition-all">
-                                <CardContent className="p-4 flex justify-between items-center">
-                                    <div className="space-y-1">
-                                        <h3 className="text-base font-bold text-black">{dish.name}</h3>
-                                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1">
-                                            <Home size={12} /> {dish.place}
-                                        </p>
-                                        <div className="text-green-600 font-bold text-lg mt-1">{dish.price}</div>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => toggleLike(dish)}
-                                        className="rounded-full hover:bg-gray-100 text-red-500"
-                                    >
-                                        <Heart size={24} fill="currentColor" />
-                                    </Button>
-                                </CardContent>
-                            </Card>
+                            <MenuCard
+                                key={dish.id}
+                                item={dish}
+                                onClick={() => onSelectFavorite(dish)}
+                                isLiked={true}
+                                onLike={() => toggleLike(dish)}
+                            />
                         ))
                     )}
                 </TabsContent>

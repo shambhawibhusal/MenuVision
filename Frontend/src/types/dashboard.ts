@@ -1,21 +1,8 @@
-export interface Dish {
-    id: number;
-    name: string;
-    place: string;
-    price: string;
-    calories?: string;
-    ingredients?: string;
-    description?: string;
-    category?: string;
-    cuisine?: string;
-    tags?: string[];
-    priceRange?: 'budget' | 'moderate' | 'expensive';
-    imageUrl?: string | null;
-}
-
 export interface ScannedItem {
     name: string;
     price: string;
+    place?: string;
+    location?: string;
     calories?: string;
     ingredients?: string;
     description?: string;
@@ -26,6 +13,14 @@ export interface ScannedItem {
     isGlutenFree?: boolean;
     origin?: string;
     category?: string;
+}
+
+export interface Dish extends ScannedItem {
+    id: number;
+    place: string;
+    cuisine?: string;
+    tags?: string[];
+    priceRange?: 'budget' | 'moderate' | 'expensive';
 }
 
 export interface HistoryItem {

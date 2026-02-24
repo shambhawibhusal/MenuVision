@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check } from "lucide-react";
+import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE } from '@/types/dashboard';
@@ -153,13 +153,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 }
             } else {
                 const newDish: Dish = {
+                    ...item,
                     id: Date.now(),
-                    name: item.name,
-                    place: restaurantName,
-                    price: item.price || '',
-                    ...(item.calories && { calories: item.calories }),
-                    ...(item.ingredients && { ingredients: item.ingredients }),
-                    ...(item.description && { description: item.description })
+                    place: item.place || 'Scanned Menu',
+                    price: item.price || ''
                 };
                 setFavoriteItems(prev => [...prev, newDish]);
                 await updateDoc(userDocRef, {
@@ -296,6 +293,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             const items: ScannedItem[] = (data.menuItems || []).map((item: any) => ({
                 name: item.name,
                 price: item.price || 'Price not available',
+                place: restaurantName || 'Scanned Menu',
+                location: restaurantLocation || '',
                 calories: item.calories ? `${item.calories} kcal` : undefined,
                 ingredients: Array.isArray(item.ingredients) ? item.ingredients.join(', ') : item.ingredients,
                 description: item.description,
@@ -550,6 +549,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             filteredDishes={filteredDishes}
                             favoriteItems={favoriteItems}
                             toggleRecommendedLike={toggleRecommendedLike}
+                            onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)}
                         />
                     )}
                     {activeTab === 'results' && (
@@ -593,11 +593,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     setScannedItems(item.scannedItems);
                                     setActiveTab('results');
                                     setViewMode('items');
-                                    setFullText(""); // Clear previous text if any, or maybe store text in history too?
+                                    setFullText("");
                                 } else {
                                     alert("No detailed items found for this scan.");
                                 }
                             }}
+                            onSelectFavorite={(dish) => setSelectedDish(dish as ScannedItem)}
                         />
                     )}
                 </main>
@@ -683,8 +684,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     <button
                                         onClick={() => toggleEditDietary('isVegetarian')}
                                         className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${editFoodProfile.isVegetarian
-                                                ? 'border-green-500 bg-green-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-green-500 bg-green-50'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${editFoodProfile.isVegetarian ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
@@ -700,8 +701,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     <button
                                         onClick={() => toggleEditDietary('isVegan')}
                                         className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${editFoodProfile.isVegan
-                                                ? 'border-green-500 bg-green-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-green-500 bg-green-50'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${editFoodProfile.isVegan ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
@@ -717,8 +718,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     <button
                                         onClick={() => toggleEditDietary('isGlutenFree')}
                                         className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${editFoodProfile.isGlutenFree
-                                                ? 'border-amber-500 bg-amber-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-amber-500 bg-amber-50'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${editFoodProfile.isGlutenFree ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500'
@@ -743,8 +744,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                             key={allergen}
                                             onClick={() => toggleEditAllergen(allergen)}
                                             className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${editFoodProfile.allergens.includes(allergen)
-                                                    ? 'bg-red-500 text-white'
-                                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                                ? 'bg-red-500 text-white'
+                                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                                 }`}
                                         >
                                             {allergen}
@@ -801,9 +802,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     </Button>
                                 )}
                             </div>
-                            <div className="text-green-600 text-xl font-bold mb-6">{selectedDish?.price}</div>
+                            <div className="text-green-600 text-xl font-bold mb-2">{selectedDish?.price}</div>
+                            {selectedDish?.place && (
+                                <p className="text-sm text-gray-500 flex items-center gap-1 mb-6">
+                                    <MapPin size={14} /> {selectedDish.place}{selectedDish.location ? `, ${selectedDish.location}` : ''}
+                                </p>
+                            )}
 
-<div className="space-y-6">
+                            <div className="space-y-6">
                                 <div>
                                     <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Ingredients</Label>
                                     <p className="text-gray-700 leading-relaxed mt-1">{selectedDish?.ingredients || 'No ingredients listed'}</p>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
-import { Heart } from 'lucide-react';
+import { Heart, MapPin } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
 interface MenuCardProps {
@@ -25,9 +25,16 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
 
                 <div className="flex-1 p-5 pb-2 sm:pb-5 sm:pr-2">
                     <div className="flex justify-between items-start gap-4 mb-2">
-                        <CardTitle className="text-xl font-bold leading-tight decoration-amber-400 group-hover:underline decoration-2 underline-offset-4 tracking-tight text-gray-900">
-                            {item.name}
-                        </CardTitle>
+                        <div className="flex-1">
+                            <CardTitle className="text-xl font-bold leading-tight decoration-amber-400 group-hover:underline decoration-2 underline-offset-4 tracking-tight text-gray-900">
+                                {item.name}
+                            </CardTitle>
+                            {item.place && (
+                                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                    <MapPin size={10} /> {item.place}{item.location ? `, ${item.location}` : ''}
+                                </p>
+                            )}
+                        </div>
                         {onLike && (
                             <Button
                                 variant="ghost"
