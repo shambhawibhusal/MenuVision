@@ -20,6 +20,12 @@ export interface ScannedItem {
     ingredients?: string;
     description?: string;
     imageUrl?: string | null;
+    allergens?: string[];
+    isVegan?: boolean;
+    isVegetarian?: boolean;
+    isGlutenFree?: boolean;
+    origin?: string;
+    category?: string;
 }
 
 export interface HistoryItem {

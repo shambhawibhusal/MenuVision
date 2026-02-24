@@ -338,8 +338,10 @@ function normalizeTags(dish: Dish): string[] {
     }
     
     if (dish.ingredients) {
-        const ingredients = dish.ingredients.toLowerCase().split(/,\s*/);
-        ingredients.forEach(ing => {
+        const ingredients = typeof dish.ingredients === 'string' 
+            ? dish.ingredients.toLowerCase().split(/,\s*/)
+            : [];
+        ingredients.forEach((ing: string) => {
             if (ing.length > 2) tags.add(ing.trim());
         });
     }

@@ -99,12 +99,22 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
         const { object } = await generateObject({
             model: model,
             schema: MenuSchema,
-            system: "Act as an OCR menu scanner and extract all visible menu items.",
+            system: `You are an expert menu scanner and culinary AI assistant. Your job is to:
+1. Extract all visible menu items from the image (name, price, category if visible)
+2. For each dish, INFER realistic data based on the dish name and cuisine type:
+   - ingredients: List 5-10 typical ingredients for this dish (be specific and realistic)
+   - calories: Estimate realistic calorie count in kcal (e.g., 450)
+   - description: Write a brief, appetizing 1-2 sentence description of the dish
+   - allergens: List common allergens present (e.g., Dairy, Gluten, Nuts)
+   - origin: The cuisine origin (e.g., Italian, Japanese, Indian)
+   - isVegan/isVegetarian/isGlutenFree: Determine based on the dish
+
+NEVER return null or empty values for ingredients, calories, or description - always infer reasonable values based on the dish name. Be creative but realistic with your estimates.`,
             messages: [
                 {
                     role: "user",
                     content: [
-                        { type: "text", text: "Extract every visible menu item into JSON." },
+                        { type: "text", text: "Extract every visible menu item with complete details. For each dish, provide realistic inferred ingredients, estimated calories, a mouth-watering description, and dietary information based on the dish name." },
                         { type: "image", image: `data:${mimeType};base64,${base64}` },
                     ],
                 },

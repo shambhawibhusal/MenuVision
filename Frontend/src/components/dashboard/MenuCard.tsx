@@ -68,11 +68,20 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                         )}
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         {item.calories && (
                             <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
                                 🔥 {item.calories}
                             </span>
+                        )}
+                        {item.isVegan && (
+                            <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-md shadow-sm">🌱 Vegan</span>
+                        )}
+                        {item.isVegetarian && !item.isVegan && (
+                            <span className="text-xs font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-md shadow-sm">🥬 Veg</span>
+                        )}
+                        {item.isGlutenFree && (
+                            <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md shadow-sm">GF</span>
                         )}
                     </div>
                 </div>

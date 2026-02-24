@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, getAdditionalUserInfo } from 'firebase/auth';
 import { auth } from '../firebase';
 import foodBackground from '../assets/food.png';
 import BackButton from '../components/BackButton';
@@ -44,6 +44,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
         try {
             const provider = new GoogleAuthProvider();
             const userCredential = await signInWithPopup(auth, provider);
+            const additionalInfo = getAdditionalUserInfo(userCredential);
+            if (additionalInfo?.isNewUser) {
+                await userCredential.user.delete();
+                setError('No account found.');
+                return;
+            }
             onLoginSuccess(userCredential.user);
         } catch (err: any) {
             console.error(err);

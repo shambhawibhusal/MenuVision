@@ -104,8 +104,8 @@ export default function App() {
             )}
             {currentScreen === 'dashboard' && user && !pendingOnboardingUser && (
                 <Dashboard onLogout={() => {
-                    sessionStorage.removeItem('currentScreen');
                     auth.signOut();
+                    updateScreen('splash');
                 }} />
             )}
         </>

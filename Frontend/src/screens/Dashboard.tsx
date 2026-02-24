@@ -43,7 +43,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [imageBlob, setImageBlob] = useState<Blob | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
 
-const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+    const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
     const [unlikedDishIds, setUnlikedDishIds] = useState<number[]>([]);
     const [phoneNumber, setPhoneNumber] = useState('');
@@ -56,7 +56,7 @@ const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [editPhone, setEditPhone] = useState('');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
+    const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
     const [editFoodProfile, setEditFoodProfile] = useState<FoodProfile>(DEFAULT_FOOD_PROFILE);
     const [isSavingFoodProfile, setIsSavingFoodProfile] = useState(false);
 
@@ -155,11 +155,11 @@ const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
                 const newDish: Dish = {
                     id: Date.now(),
                     name: item.name,
-                    place: 'Scanned Menu',
+                    place: restaurantName,
                     price: item.price || '',
-                    calories: item.calories || undefined,
-                    ingredients: item.ingredients || undefined,
-                    description: item.description || undefined
+                    ...(item.calories && { calories: item.calories }),
+                    ...(item.ingredients && { ingredients: item.ingredients }),
+                    ...(item.description && { description: item.description })
                 };
                 setFavoriteItems(prev => [...prev, newDish]);
                 await updateDoc(userDocRef, {
@@ -293,7 +293,20 @@ const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
             console.log("Analysis Result:", data);
             console.log("Menu items with images:", data.menuItems?.map((item: any) => ({ name: item.name, imageUrl: item.imageUrl })));
 
-            const items: ScannedItem[] = data.menuItems || [];
+            const items: ScannedItem[] = (data.menuItems || []).map((item: any) => ({
+                name: item.name,
+                price: item.price || 'Price not available',
+                calories: item.calories ? `${item.calories} kcal` : undefined,
+                ingredients: Array.isArray(item.ingredients) ? item.ingredients.join(', ') : item.ingredients,
+                description: item.description,
+                imageUrl: item.imageUrl,
+                allergens: item.allergens,
+                isVegan: item.isVegan,
+                isVegetarian: item.isVegetarian,
+                isGlutenFree: item.isGlutenFree,
+                origin: item.origin,
+                category: item.category
+            }));
             const extractedText = data.fullText || "";
 
             if (items.length > 0) {
@@ -447,7 +460,7 @@ const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
         setShowEditProfile(true);
     };
 
-const handleSaveProfile = async () => {
+    const handleSaveProfile = async () => {
         if (!auth.currentUser) return;
         setIsSavingProfile(true);
 
@@ -559,7 +572,7 @@ const handleSaveProfile = async () => {
                             sendMessage={sendMessage}
                         />
                     )}
-{activeTab === 'profile' && (
+                    {activeTab === 'profile' && (
                         <ProfileTab
                             user={auth.currentUser}
                             phoneNumber={phoneNumber}
@@ -655,7 +668,7 @@ const handleSaveProfile = async () => {
                             <Button variant="outline" onClick={() => setShowEditProfile(false)} disabled={isSavingProfile} className="flex-1 h-12 rounded-xl border-gray-200 font-bold">Cancel</Button>
                         </DialogFooter>
                     </DialogContent>
-</Dialog>
+                </Dialog>
 
                 <Dialog open={showEditFoodProfile} onOpenChange={setShowEditFoodProfile}>
                     <DialogContent className="sm:max-w-md rounded-3xl p-6 border-none max-h-[90vh] overflow-y-auto">
@@ -669,15 +682,13 @@ const handleSaveProfile = async () => {
                                 <div className="space-y-2">
                                     <button
                                         onClick={() => toggleEditDietary('isVegetarian')}
-                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
-                                            editFoodProfile.isVegetarian
+                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${editFoodProfile.isVegetarian
                                                 ? 'border-green-500 bg-green-50'
                                                 : 'border-gray-200 hover:border-gray-300'
-                                        }`}
+                                            }`}
                                     >
-                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                            editFoodProfile.isVegetarian ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
-                                        }`}>
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${editFoodProfile.isVegetarian ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+                                            }`}>
                                             <Leaf size={20} />
                                         </div>
                                         <div className="flex-1 text-left">
@@ -688,15 +699,13 @@ const handleSaveProfile = async () => {
 
                                     <button
                                         onClick={() => toggleEditDietary('isVegan')}
-                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
-                                            editFoodProfile.isVegan
+                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${editFoodProfile.isVegan
                                                 ? 'border-green-500 bg-green-50'
                                                 : 'border-gray-200 hover:border-gray-300'
-                                        }`}
+                                            }`}
                                     >
-                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                            editFoodProfile.isVegan ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
-                                        }`}>
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${editFoodProfile.isVegan ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-500'
+                                            }`}>
                                             <span className="text-lg">🌱</span>
                                         </div>
                                         <div className="flex-1 text-left">
@@ -707,15 +716,13 @@ const handleSaveProfile = async () => {
 
                                     <button
                                         onClick={() => toggleEditDietary('isGlutenFree')}
-                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${
-                                            editFoodProfile.isGlutenFree
+                                        className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${editFoodProfile.isGlutenFree
                                                 ? 'border-amber-500 bg-amber-50'
                                                 : 'border-gray-200 hover:border-gray-300'
-                                        }`}
+                                            }`}
                                     >
-                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                                            editFoodProfile.isGlutenFree ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500'
-                                        }`}>
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${editFoodProfile.isGlutenFree ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-500'
+                                            }`}>
                                             <Wheat size={20} />
                                         </div>
                                         <div className="flex-1 text-left">
@@ -735,11 +742,10 @@ const handleSaveProfile = async () => {
                                         <button
                                             key={allergen}
                                             onClick={() => toggleEditAllergen(allergen)}
-                                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                                                editFoodProfile.allergens.includes(allergen)
+                                            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${editFoodProfile.allergens.includes(allergen)
                                                     ? 'bg-red-500 text-white'
                                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                            }`}
+                                                }`}
                                         >
                                             {allergen}
                                         </button>
@@ -797,7 +803,7 @@ const handleSaveProfile = async () => {
                             </div>
                             <div className="text-green-600 text-xl font-bold mb-6">{selectedDish?.price}</div>
 
-                            <div className="space-y-6">
+<div className="space-y-6">
                                 <div>
                                     <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Ingredients</Label>
                                     <p className="text-gray-700 leading-relaxed mt-1">{selectedDish?.ingredients || 'No ingredients listed'}</p>
@@ -809,10 +815,36 @@ const handleSaveProfile = async () => {
                                         <p className="text-gray-900 font-bold mt-1 text-lg">{selectedDish?.calories || 'N/A'}</p>
                                     </div>
                                     <div>
-                                        <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Weight</Label>
-                                        <p className="text-gray-900 font-bold mt-1 text-lg">Approx. 450g</p>
+                                        <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Origin</Label>
+                                        <p className="text-gray-900 font-bold mt-1 text-lg">{selectedDish?.origin || 'Various'}</p>
                                     </div>
                                 </div>
+                                {(selectedDish?.isVegan || selectedDish?.isVegetarian || selectedDish?.isGlutenFree) && (
+                                    <>
+                                        <Separator />
+                                        <div>
+                                            <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Dietary</Label>
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {selectedDish?.isVegan && <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">🌱 Vegan</span>}
+                                                {selectedDish?.isVegetarian && !selectedDish?.isVegan && <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">🥬 Vegetarian</span>}
+                                                {selectedDish?.isGlutenFree && <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-sm font-medium">🌾 Gluten-Free</span>}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                                {selectedDish?.allergens && selectedDish.allergens.length > 0 && (
+                                    <>
+                                        <Separator />
+                                        <div>
+                                            <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Allergens</Label>
+                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                {selectedDish.allergens.map((allergen, idx) => (
+                                                    <span key={idx} className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">{allergen}</span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                                 <Separator />
                                 <div>
                                     <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Description</Label>
