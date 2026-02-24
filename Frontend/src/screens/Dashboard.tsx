@@ -21,7 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE } from '@/types/dashboard';
 
-// Utils
+import { useDishes } from '@/hooks/useDishes';
 import { getRecommendations } from '../utils/recommendations';
 
 // Components
@@ -37,6 +37,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
+    const { dishes: allDishes, loading: dishesLoading } = useDishes();
     const [activeTab, setActiveTab] = useState<Tab>('home');
     const [showScanOptions, setShowScanOptions] = useState(false);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -196,8 +197,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [chatInput, setChatInput] = useState('');
 
     const recommendedDishes = useMemo(() => {
-        return getRecommendations(favoriteItems, unlikedDishIds, 10);
-    }, [favoriteItems, unlikedDishIds]);
+        return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10);
+    }, [allDishes, favoriteItems, unlikedDishIds]);
 
     const filteredDishes = recommendedDishes.filter(dish =>
         dish.name.toLowerCase().includes(searchText.toLowerCase())
@@ -540,6 +541,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return (
         <div className="w-screen h-screen flex items-center justify-center">
             <div className={containerStyle + " flex flex-col shadow-2xl relative overflow-hidden"}>
+                {dishesLoading && (
+                    <div className="absolute inset-0 bg-white/80 z-[200] flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p className="text-gray-600 font-medium">Loading dishes...</p>
+                        </div>
+                    </div>
+                )}
                 <main className="flex-1 overflow-y-auto z-[3] relative custom-scrollbar">
                     {activeTab === 'home' && (
                         <HomeTab

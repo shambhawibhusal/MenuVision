@@ -50,8 +50,8 @@ const ChatTab: React.FC<ChatTabProps> = ({
                                     />
                                     <p className="text-[10px] text-gray-400 mt-1 text-right">
                                         Photo via{' '}
-                                        <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
-                                            Unsplash
+                                        <a href="https://pexels.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+                                            Pexels
                                         </a>
                                     </p>
                                 </div>
