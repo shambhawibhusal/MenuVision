@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE } from '@/types/dashboard';
 
 import { useDishes } from '@/hooks/useDishes';
+import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
 import { getRecommendations } from '../utils/recommendations';
 
 // Components
@@ -38,6 +39,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const { dishes: allDishes, loading: dishesLoading } = useDishes();
+    const { globallyLikedDishes } = useGloballyLikedDishes();
     const [activeTab, setActiveTab] = useState<Tab>('home');
     const [showScanOptions, setShowScanOptions] = useState(false);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -197,8 +199,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [chatInput, setChatInput] = useState('');
 
     const recommendedDishes = useMemo(() => {
-        return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10);
-    }, [allDishes, favoriteItems, unlikedDishIds]);
+        return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10, globallyLikedDishes);
+    }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes]);
 
     const filteredDishes = recommendedDishes.filter(dish =>
         dish.name.toLowerCase().includes(searchText.toLowerCase())

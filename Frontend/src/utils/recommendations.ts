@@ -81,55 +81,56 @@ export function getRecommendations(
     dishes: Dish[],
     likedDishes: Dish[],
     unlikedDishIds: number[],
-    maxRecommendations: number = 10
+    maxRecommendations: number = 10,
+    globallyLikedDishes?: Dish[]
 ): Dish[] {
     const likedIds = new Set(likedDishes.map(d => d.id));
     const excludedIds = new Set([...unlikedDishIds]);
-    
-    const candidateDishes = dishes.filter(d => !unlikedDishIds.includes(d.id));
-    
-    const recommendations: RecommendationScore[] = [];
-    
-    candidateDishes.forEach(candidate => {
-        if (likedIds.has(candidate.id)) return;
-        
-        let totalScore = 0;
-        let matchCount = 0;
-        
-        likedDishes.forEach(liked => {
-            const similarity = calculateSimilarity(liked, candidate);
-            if (similarity > 0) {
-                totalScore += similarity;
-                matchCount++;
-            }
-        });
-        
-        if (matchCount > 0) {
-            const avgScore = totalScore / likedDishes.length;
-            recommendations.push({ dish: candidate, score: avgScore });
-        }
-    });
-    
-    recommendations.sort((a, b) => b.score - a.score);
-    
+
     const result: Dish[] = [];
-    
+
+    // 1. Add user's own liked dishes first
     likedDishes.forEach(liked => {
         if (!excludedIds.has(liked.id)) {
             result.push(liked);
         }
     });
-    
+
     const seenIds = new Set<number>(result.map(d => d.id));
-    
-    recommendations.forEach(rec => {
-        if (!seenIds.has(rec.dish.id) && result.length < maxRecommendations) {
-            result.push(rec.dish);
-            seenIds.add(rec.dish.id);
-        }
-    });
-    
-    if (result.length < maxRecommendations && likedDishes.length === 0) {
+
+    // 2. Add ALL globally liked dishes (sorted by similarity to user's likes)
+    if (globallyLikedDishes && globallyLikedDishes.length > 0) {
+        const scoredGlobalDishes: RecommendationScore[] = [];
+
+        globallyLikedDishes.forEach(dish => {
+            // Skip if already in result or excluded
+            if (seenIds.has(dish.id) || excludedIds.has(dish.id)) return;
+
+            // Calculate similarity score based on user's liked dishes
+            let totalScore = 0;
+            likedDishes.forEach(liked => {
+                totalScore += calculateSimilarity(liked, dish);
+            });
+
+            // If user has no likes, give all globally liked dishes equal score
+            const avgScore = likedDishes.length > 0 ? totalScore / likedDishes.length : 1;
+
+            scoredGlobalDishes.push({ dish, score: avgScore });
+        });
+
+        // Sort by similarity score (highest first)
+        scoredGlobalDishes.sort((a, b) => b.score - a.score);
+
+        // Add ALL globally liked dishes to result
+        scoredGlobalDishes.forEach(({ dish }) => {
+            result.push(dish);
+            seenIds.add(dish.id);
+        });
+    }
+
+    // 3. Fallback: if no globally liked dishes, fill with random dishes
+    if (result.length < maxRecommendations && (!globallyLikedDishes || globallyLikedDishes.length === 0)) {
+        const candidateDishes = dishes.filter(d => !unlikedDishIds.includes(d.id));
         const shuffled = [...candidateDishes].sort(() => Math.random() - 0.5);
         shuffled.forEach(dish => {
             if (!seenIds.has(dish.id) && result.length < maxRecommendations) {
@@ -138,7 +139,8 @@ export function getRecommendations(
             }
         });
     }
-    
+
+    // Return all results (no limit)
     return result;
 }
 
