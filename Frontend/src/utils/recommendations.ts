@@ -1,8 +1,40 @@
-import { Dish } from '@/types/dashboard';
+import { Dish, FoodProfile } from '@/types/dashboard';
 
 export interface RecommendationScore {
     dish: Dish;
     score: number;
+}
+
+function matchesFoodProfile(dish: Dish, foodProfile: FoodProfile): boolean {
+    // Hard filter: if user is vegetarian, only recommend vegetarian dishes
+    if (foodProfile.isVegetarian && !dish.isVegetarian) {
+        return false;
+    }
+
+    // Hard filter: if user is vegan, only recommend vegan dishes
+    if (foodProfile.isVegan && !dish.isVegan) {
+        return false;
+    }
+
+    // Hard filter: if user is gluten-free, only recommend gluten-free dishes
+    if (foodProfile.isGlutenFree && !dish.isGlutenFree) {
+        return false;
+    }
+
+    // Hard filter: exclude dishes containing user's allergens
+    if (foodProfile.allergens && foodProfile.allergens.length > 0) {
+        const dishAllergens = dish.allergens || [];
+        const hasAllergen = foodProfile.allergens.some(userAllergen =>
+            dishAllergens.some(dishAllergen =>
+                dishAllergen.toLowerCase() === userAllergen.toLowerCase()
+            )
+        );
+        if (hasAllergen) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 function extractPriceValue(price: string): number {
@@ -82,29 +114,36 @@ export function getRecommendations(
     likedDishes: Dish[],
     unlikedDishIds: number[],
     maxRecommendations: number = 10,
-    globallyLikedDishes?: Dish[]
+    globallyLikedDishes?: Dish[],
+    foodProfile?: FoodProfile
 ): Dish[] {
     const likedIds = new Set(likedDishes.map(d => d.id));
     const excludedIds = new Set([...unlikedDishIds]);
 
     const result: Dish[] = [];
 
-    // 1. Add user's own liked dishes first
+    // Helper to check if dish passes hard filters
+    const passesFilters = (dish: Dish): boolean => {
+        if (!foodProfile) return true;
+        return matchesFoodProfile(dish, foodProfile);
+    };
+
+    // 1. Add user's own liked dishes first (if they match food profile)
     likedDishes.forEach(liked => {
-        if (!excludedIds.has(liked.id)) {
+        if (!excludedIds.has(liked.id) && passesFilters(liked)) {
             result.push(liked);
         }
     });
 
     const seenIds = new Set<number>(result.map(d => d.id));
 
-    // 2. Add ALL globally liked dishes (sorted by similarity to user's likes)
+    // 2. Add globally liked dishes that match food profile (sorted by similarity)
     if (globallyLikedDishes && globallyLikedDishes.length > 0) {
         const scoredGlobalDishes: RecommendationScore[] = [];
 
         globallyLikedDishes.forEach(dish => {
-            // Skip if already in result or excluded
-            if (seenIds.has(dish.id) || excludedIds.has(dish.id)) return;
+            // Skip if already in result, excluded, or doesn't match food profile
+            if (seenIds.has(dish.id) || excludedIds.has(dish.id) || !passesFilters(dish)) return;
 
             // Calculate similarity score based on user's liked dishes
             let totalScore = 0;
@@ -121,24 +160,41 @@ export function getRecommendations(
         // Sort by similarity score (highest first)
         scoredGlobalDishes.sort((a, b) => b.score - a.score);
 
-        // Add ALL globally liked dishes to result
+        // Add all matching globally liked dishes to result
         scoredGlobalDishes.forEach(({ dish }) => {
             result.push(dish);
             seenIds.add(dish.id);
         });
     }
 
-    // 3. Fallback: if no globally liked dishes, fill with random dishes
-    if (result.length < maxRecommendations && (!globallyLikedDishes || globallyLikedDishes.length === 0)) {
-        const candidateDishes = dishes.filter(d => !unlikedDishIds.includes(d.id));
-        const shuffled = [...candidateDishes].sort(() => Math.random() - 0.5);
-        shuffled.forEach(dish => {
-            if (!seenIds.has(dish.id) && result.length < maxRecommendations) {
-                result.push(dish);
-                seenIds.add(dish.id);
-            }
+    // 3. Add other dishes from the database that match food profile
+    // This ensures dishes that haven't been liked yet but match preferences can be recommended
+    const otherMatchingDishes: RecommendationScore[] = [];
+
+    dishes.forEach(dish => {
+        // Skip if already in result, excluded, or doesn't match food profile
+        if (seenIds.has(dish.id) || excludedIds.has(dish.id) || !passesFilters(dish)) return;
+
+        // Calculate similarity score based on user's liked dishes
+        let totalScore = 0;
+        likedDishes.forEach(liked => {
+            totalScore += calculateSimilarity(liked, dish);
         });
-    }
+
+        // If user has no likes, give equal score to all matching dishes
+        const avgScore = likedDishes.length > 0 ? totalScore / likedDishes.length : 0.5;
+
+        otherMatchingDishes.push({ dish, score: avgScore });
+    });
+
+    // Sort by similarity score (highest first)
+    otherMatchingDishes.sort((a, b) => b.score - a.score);
+
+    // Add other matching dishes to fill up recommendations
+    otherMatchingDishes.forEach(({ dish }) => {
+        result.push(dish);
+        seenIds.add(dish.id);
+    });
 
     // Return all results (no limit)
     return result;

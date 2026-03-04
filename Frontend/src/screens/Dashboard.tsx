@@ -199,8 +199,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [chatInput, setChatInput] = useState('');
 
     const recommendedDishes = useMemo(() => {
-        return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10, globallyLikedDishes);
-    }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes]);
+        return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10, globallyLikedDishes, foodProfile);
+    }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes, foodProfile]);
 
     const filteredDishes = recommendedDishes.filter(dish =>
         dish.name.toLowerCase().includes(searchText.toLowerCase())
