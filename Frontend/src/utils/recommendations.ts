@@ -167,34 +167,48 @@ export function getRecommendations(
         });
     }
 
-    // 3. Add other dishes from the database that match food profile
-    // This ensures dishes that haven't been liked yet but match preferences can be recommended
-    const otherMatchingDishes: RecommendationScore[] = [];
+    // 3. Add dishes that match user's onboarding preferences (vegetarian, vegan, allergens)
+    //    even if:
+    //    - The dish has no likes
+    //    - The dish has only been scanned by other users
+    // This ensures onboarding preferences are always respected
+    const hasUserLikes = likedDishes.length > 0;
+    
+    if (foodProfile) {
+        const preferenceMatchingDishes: RecommendationScore[] = [];
 
-    dishes.forEach(dish => {
-        // Skip if already in result, excluded, or doesn't match food profile
-        if (seenIds.has(dish.id) || excludedIds.has(dish.id) || !passesFilters(dish)) return;
-
-        // Calculate similarity score based on user's liked dishes
-        let totalScore = 0;
-        likedDishes.forEach(liked => {
-            totalScore += calculateSimilarity(liked, dish);
+        dishes.forEach(dish => {
+            if (seenIds.has(dish.id) || excludedIds.has(dish.id)) return;
+            
+            if (matchesFoodProfile(dish, foodProfile)) {
+                let score = 0.5;
+                if (hasUserLikes) {
+                    let totalScore = 0;
+                    likedDishes.forEach(liked => {
+                        totalScore += calculateSimilarity(liked, dish);
+                    });
+                    score = totalScore / likedDishes.length;
+                } else {
+                    score = 1.0;
+                }
+                
+                preferenceMatchingDishes.push({ dish, score });
+            }
         });
 
-        // If user has no likes, give equal score to all matching dishes
-        const avgScore = likedDishes.length > 0 ? totalScore / likedDishes.length : 0.5;
+        preferenceMatchingDishes.sort((a, b) => b.score - a.score);
 
-        otherMatchingDishes.push({ dish, score: avgScore });
-    });
-
-    // Sort by similarity score (highest first)
-    otherMatchingDishes.sort((a, b) => b.score - a.score);
-
-    // Add other matching dishes to fill up recommendations
-    otherMatchingDishes.forEach(({ dish }) => {
-        result.push(dish);
-        seenIds.add(dish.id);
-    });
+        preferenceMatchingDishes.forEach(({ dish }) => {
+            result.push(dish);
+            seenIds.add(dish.id);
+        });
+    } else if (!hasUserLikes) {
+        dishes.forEach(dish => {
+            if (seenIds.has(dish.id) || excludedIds.has(dish.id)) return;
+            result.push(dish);
+            seenIds.add(dish.id);
+        });
+    }
 
     // Return all results (no limit)
     return result;
