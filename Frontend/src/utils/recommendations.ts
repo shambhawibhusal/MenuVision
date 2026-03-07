@@ -210,8 +210,19 @@ export function getRecommendations(
         });
     }
 
-    // Return all results (no limit)
-    return result;
+    // Return all results with explicit deduplication by ID and name
+    const uniqueResult: Dish[] = [];
+    const addedIds = new Set<number>();
+    const addedNames = new Set<string>();
+    result.forEach(dish => {
+        if (!addedIds.has(dish.id) && !addedNames.has(dish.name.toLowerCase())) {
+            addedIds.add(dish.id);
+            addedNames.add(dish.name.toLowerCase());
+            uniqueResult.push(dish);
+        }
+    });
+    
+    return uniqueResult;
 }
 
 export function getDishById(dishes: Dish[], id: number): Dish | undefined {
