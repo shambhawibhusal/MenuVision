@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ScannedItem, Tab, Dish } from '@/types/dashboard';
+import { ScannedItem, Tab, Dish, DishRating } from '@/types/dashboard';
 
 interface ResultsTabProps {
     viewMode: 'items' | 'text';
@@ -13,6 +13,7 @@ interface ResultsTabProps {
     setActiveTab: (t: Tab) => void;
     favoriteItems: Dish[];
     onToggleLike: (item: ScannedItem) => void;
+    dishRatings?: Record<string, DishRating>;
 }
 
 import MenuCard from './MenuCard';
@@ -25,7 +26,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     fullText,
     setActiveTab,
     favoriteItems,
-    onToggleLike
+    onToggleLike,
+    dishRatings = {}
 }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
@@ -35,11 +37,13 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     <TabsTrigger value="items" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm transition-all font-medium">Menu Items</TabsTrigger>
                     <TabsTrigger value="text" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm transition-all font-medium">Full Text</TabsTrigger>
                 </TabsList>
-                <TabsContent value="items" className="mt-6">
+<TabsContent value="items" className="mt-6">
                     <div className="flex flex-col gap-4 pb-20">
                         {scannedItems.length === 0 && <p className="text-gray-500 text-center py-10 w-full">No items found.</p>}
                         {scannedItems.map((item, index) => {
                             const isLiked = favoriteItems.some(fav => fav.name === item.name);
+                            const ratingKey = `dish_${item.name}`;
+                            const userRating = dishRatings[ratingKey]?.rating || 0;
                             return (
                                 <MenuCard
                                     key={index}
@@ -47,6 +51,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                                     onClick={() => setSelectedDish(item)}
                                     isLiked={isLiked}
                                     onLike={() => onToggleLike(item)}
+                                    rating={userRating}
                                 />
                             );
                         })}

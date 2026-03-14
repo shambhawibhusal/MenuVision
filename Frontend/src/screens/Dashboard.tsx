@@ -16,10 +16,10 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin } from "lucide-react";
+import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Star, Send } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE } from '@/types/dashboard';
+import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating } from '@/types/dashboard';
 
 import { useDishes } from '@/hooks/useDishes';
 import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
@@ -32,6 +32,7 @@ import ChatTab from '@/components/dashboard/ChatTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
 import HistoryTab from '@/components/dashboard/HistoryTab';
 import NavIcon from '@/components/dashboard/NavIcon';
+import StarRating from '@/components/ui/StarRating';
 
 interface DashboardProps {
     onLogout: () => void;
@@ -59,9 +60,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [editPhone, setEditPhone] = useState('');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-    const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
+const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
     const [editFoodProfile, setEditFoodProfile] = useState<FoodProfile>(DEFAULT_FOOD_PROFILE);
     const [isSavingFoodProfile, setIsSavingFoodProfile] = useState(false);
+
+    const [dishRatings, setDishRatings] = useState<Record<string, DishRating>>({});
+    const [feedbackComment, setFeedbackComment] = useState('');
+    const [userRating, setUserRating] = useState(0);
 
     React.useEffect(() => {
         const fetchUserData = async () => {
@@ -82,11 +87,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     const updates: any = {};
                     if (!data.fullname && auth.currentUser.displayName) updates.fullname = auth.currentUser.displayName;
                     if (!data.email && auth.currentUser.email) updates.email = auth.currentUser.email;
-                    if (!data.uid) updates.uid = auth.currentUser.uid;
+if (!data.uid) updates.uid = auth.currentUser.uid;
 
                     if (Object.keys(updates).length > 0) {
                         console.log("Repairing user document fields:", updates);
                         await updateDoc(userDocRef, updates);
+                    }
+
+                    if (data.dishRatings) {
+                        setDishRatings(data.dishRatings);
                     }
                 } else {
                     await setDoc(userDocRef, {
@@ -171,7 +180,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
-    const deleteHistoryItem = async (item: HistoryItem) => {
+const deleteHistoryItem = async (item: HistoryItem) => {
         if (!auth.currentUser) return;
 
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
@@ -184,6 +193,44 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         } catch (error) {
             console.error("Error deleting history item:", error);
         }
+    };
+
+    const saveRating = async (dishName: string, rating: number, comment?: string) => {
+        if (!auth.currentUser || rating === 0) return;
+
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+        const ratingKey = `dish_${dishName}`;
+        
+        const newRating: DishRating = {
+            userId: auth.currentUser.uid,
+            rating,
+            comment: comment || '',
+            createdAt: new Date().toISOString()
+        };
+
+        try {
+            const userDoc = await getDoc(userDocRef);
+            const existingRatings = userDoc.exists() ? (userDoc.data().dishRatings || {}) : {};
+            const updatedRatings = {
+                ...existingRatings,
+                [ratingKey]: newRating
+            };
+
+            setDishRatings(updatedRatings);
+            await updateDoc(userDocRef, {
+                dishRatings: updatedRatings
+            });
+            
+            setUserRating(0);
+            setFeedbackComment('');
+        } catch (error) {
+            console.error("Error saving rating:", error);
+        }
+    };
+
+    const getDishRating = (dishName: string): DishRating | null => {
+        const ratingKey = `dish_${dishName}`;
+        return dishRatings[ratingKey] || null;
     };
 
     // -- Data States
@@ -552,7 +599,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     </div>
                 )}
                 <main className="flex-1 overflow-y-auto z-[3] relative custom-scrollbar">
-                    {activeTab === 'home' && (
+{activeTab === 'home' && (
                         <HomeTab
                             searchText={searchText}
                             setSearchText={setSearchText}
@@ -561,10 +608,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             favoriteItems={favoriteItems}
                             toggleRecommendedLike={toggleRecommendedLike}
                             onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)}
+                            dishRatings={dishRatings}
                         />
                     )}
                     {activeTab === 'results' && (
-                        <ResultsTab
+<ResultsTab
                             viewMode={viewMode}
                             setViewMode={setViewMode}
                             scannedItems={scannedItems}
@@ -573,6 +621,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             setActiveTab={setActiveTab}
                             favoriteItems={favoriteItems}
                             onToggleLike={toggleScannedItemLike}
+                            dishRatings={dishRatings}
                         />
                     )}
                     {activeTab === 'chat' && (
@@ -593,7 +642,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             onLogout={onLogout}
                         />
                     )}
-                    {activeTab === 'history' && (
+{activeTab === 'history' && (
                         <HistoryTab
                             historyItems={historyItems}
                             favoriteItems={favoriteItems}
@@ -610,6 +659,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 }
                             }}
                             onSelectFavorite={(dish) => setSelectedDish(dish as ScannedItem)}
+                            dishRatings={dishRatings}
                         />
                     )}
                 </main>
@@ -774,9 +824,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     </DialogContent>
                 </Dialog>
 
-                <Dialog open={!!selectedDish} onOpenChange={() => setSelectedDish(null)}>
-                    <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-                        <div className="h-32 bg-amber-400 relative">
+<Dialog open={!!selectedDish} onOpenChange={() => setSelectedDish(null)}>
+                    <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl max-h-[90vh]">
+                        <div className="h-32 bg-amber-400 relative shrink-0">
                             {selectedDish?.imageUrl ? (
                                 <img src={selectedDish.imageUrl} alt={selectedDish.name} className="w-full h-full object-cover" />
                             ) : null}
@@ -792,7 +842,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 <div className="w-20 h-20 bg-white rounded-2xl shadow-lg flex items-center justify-center text-3xl">🍲</div>
                             </div>
                         </div>
-                        <div className="p-8 pt-12">
+                        <div className="p-8 pt-12 overflow-y-auto max-h-[calc(90vh-8rem)] custom-scrollbar">
                             <DialogHeader className="sr-only">
                                 <DialogTitle>{selectedDish?.name}</DialogTitle>
                                 <DialogDescription>Details about {selectedDish?.name}, including ingredients and price.</DialogDescription>
@@ -862,10 +912,56 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                         </div>
                                     </>
                                 )}
-                                <Separator />
+<Separator />
                                 <div>
                                     <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Description</Label>
                                     <p className="text-gray-600 leading-relaxed mt-1 italic">"{selectedDish?.description || 'A delicious dish prepared with fresh ingredients.'}"</p>
+                                </div>
+
+                                <Separator />
+                                <div className="space-y-3">
+                                    <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Rate this dish</Label>
+                                    {getDishRating(selectedDish?.name || '') ? (
+                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <StarRating 
+                                                    rating={getDishRating(selectedDish?.name || '')?.rating || 0} 
+                                                    readonly 
+                                                    size={20}
+                                                />
+                                                <span className="text-sm font-medium text-green-700">You rated this!</span>
+                                            </div>
+                                            {getDishRating(selectedDish?.name || '')?.comment && (
+                                                <p className="text-sm text-gray-600 italic">"{getDishRating(selectedDish?.name || '')?.comment}"</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex justify-center py-2">
+                                                <StarRating 
+                                                    rating={userRating} 
+                                                    onRatingChange={setUserRating}
+                                                    size={32}
+                                                />
+                                            </div>
+                                            {userRating > 0 && (
+                                                <div className="space-y-2">
+                                                    <Input
+                                                        placeholder="Add a comment (optional)"
+                                                        value={feedbackComment}
+                                                        onChange={(e) => setFeedbackComment(e.target.value)}
+                                                        className="h-12 rounded-xl"
+                                                    />
+                                                    <Button 
+                                                        onClick={() => saveRating(selectedDish?.name || '', userRating, feedbackComment)}
+                                                        className="w-full h-10 rounded-xl bg-amber-400 text-black font-bold hover:bg-amber-500"
+                                                    >
+                                                        <Send size={16} className="mr-2" /> Submit Rating
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>

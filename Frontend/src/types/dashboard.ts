@@ -15,12 +15,21 @@ export interface ScannedItem {
     category?: string;
 }
 
+export interface DishRating {
+    userId: string;
+    rating: number;
+    comment?: string;
+    createdAt: string;
+}
+
 export interface Dish extends ScannedItem {
     id: number;
     place: string;
     cuisine?: string;
     tags?: string[];
     priceRange?: 'budget' | 'moderate' | 'expensive';
+    ratings?: DishRating[];
+    averageRating?: number;
 }
 
 export interface HistoryItem {

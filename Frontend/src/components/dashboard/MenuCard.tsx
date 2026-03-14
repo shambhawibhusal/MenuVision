@@ -1,17 +1,27 @@
 import React from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
-import { Heart, MapPin } from 'lucide-react';
+import { Heart, MapPin, Star } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import StarRating from '@/components/ui/StarRating';
 
 interface MenuCardProps {
     item: ScannedItem;
     onClick: () => void;
     isLiked?: boolean;
     onLike?: () => void;
+    rating?: number;
 }
 
-const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike }) => {
+interface MenuCardProps {
+    item: ScannedItem;
+    onClick: () => void;
+    isLiked?: boolean;
+    onLike?: () => void;
+    rating?: number;
+}
+
+const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, rating = 0 }) => {
     return (
         <Card onClick={onClick} className="cursor-pointer bg-white hover:bg-amber-50/30 border border-gray-100 text-gray-900 transition-all overflow-hidden group relative shadow-sm hover:shadow-md hover:shadow-amber-100/50 transform hover:-translate-y-0.5 w-full rounded-xl">
             <div className="absolute inset-0 bg-gradient-to-r from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -29,10 +39,15 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                             <CardTitle className="text-xl font-bold leading-tight decoration-amber-400 group-hover:underline decoration-2 underline-offset-4 tracking-tight text-gray-900">
                                 {item.name}
                             </CardTitle>
-                            {item.place && (
+{item.place && (
                                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                     <MapPin size={10} /> {item.place}{item.location ? `, ${item.location}` : ''}
                                 </p>
+                            )}
+                            {rating > 0 && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <StarRating rating={rating} readonly size={12} />
+                                </div>
                             )}
                         </div>
                         {onLike && (

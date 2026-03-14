@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { HistoryItem, Dish } from '@/types/dashboard';
+import { HistoryItem, Dish, DishRating } from '@/types/dashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,9 +13,10 @@ interface HistoryTabProps {
     onSelectHistoryItem: (item: HistoryItem) => void;
     onDeleteHistoryItem: (item: HistoryItem) => void;
     onSelectFavorite: (dish: Dish) => void;
+    dishRatings?: Record<string, DishRating>;
 }
 
-const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite }) => {
+const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite, dishRatings = {} }) => {
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
             <h2 className="text-3xl font-bold text-gray-900 mb-8">My Activity</h2>
@@ -75,15 +76,20 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                     {favoriteItems.length === 0 ? (
                         <div className="text-center py-20 text-gray-400">No favorite dishes yet.</div>
                     ) : (
-                        favoriteItems.map(dish => (
-                            <MenuCard
-                                key={dish.id}
-                                item={dish}
-                                onClick={() => onSelectFavorite(dish)}
-                                isLiked={true}
-                                onLike={() => toggleLike(dish)}
-                            />
-                        ))
+                        favoriteItems.map(dish => {
+                            const ratingKey = `dish_${dish.name}`;
+                            const userRating = dishRatings[ratingKey]?.rating || 0;
+                            return (
+                                <MenuCard
+                                    key={dish.id}
+                                    item={dish}
+                                    onClick={() => onSelectFavorite(dish)}
+                                    isLiked={true}
+                                    onLike={() => toggleLike(dish)}
+                                    rating={userRating}
+                                />
+                            );
+                        })
                     )}
                 </TabsContent>
             </Tabs>

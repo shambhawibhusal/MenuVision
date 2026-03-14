@@ -2,7 +2,7 @@ import React from 'react';
 import { Search, Camera } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dish } from '@/types/dashboard';
+import { Dish, DishRating } from '@/types/dashboard';
 import MenuCard from './MenuCard';
 
 interface HomeTabProps {
@@ -13,6 +13,7 @@ interface HomeTabProps {
     favoriteItems: Dish[];
     toggleRecommendedLike: (dish: Dish) => void;
     onSelectDish: (dish: Dish) => void;
+    dishRatings?: Record<string, DishRating>;
 }
 
 const HomeTab: React.FC<HomeTabProps> = ({
@@ -22,7 +23,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
     filteredDishes,
     favoriteItems,
     toggleRecommendedLike,
-    onSelectDish
+    onSelectDish,
+    dishRatings = {}
 }) => {
     return (
         <div className="p-5 pt-8 animate-fade">
@@ -58,9 +60,11 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 <span className="text-amber-600 text-sm font-medium hover:underline cursor-pointer">View All</span>
             </div>
 
-            <div className="flex flex-col gap-4">
+<div className="flex flex-col gap-4">
                 {filteredDishes.map(dish => {
                     const isLiked = favoriteItems.some(fav => fav.id === dish.id);
+                    const ratingKey = `dish_${dish.name}`;
+                    const userRating = dishRatings[ratingKey]?.rating || 0;
                     return (
                         <MenuCard
                             key={dish.id}
@@ -68,6 +72,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                             onClick={() => onSelectDish(dish)}
                             isLiked={isLiked}
                             onLike={() => toggleRecommendedLike(dish)}
+                            rating={userRating}
                         />
                     );
                 })}
