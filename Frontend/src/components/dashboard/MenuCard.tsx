@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
-import { Heart, MapPin, Star } from 'lucide-react';
+import { Heart, MapPin, Star, Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
 
@@ -94,6 +94,11 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                         {item.calories && (
                             <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
                                 🔥 {item.calories}
+                            </span>
+                        )}
+                        {item.prepTime && (
+                            <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
+                                <Clock size={12} /> {item.prepTime}
                             </span>
                         )}
                         {item.isVegan && (

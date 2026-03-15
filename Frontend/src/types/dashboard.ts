@@ -11,6 +11,7 @@ export interface ScannedItem {
     isVegan?: boolean;
     isVegetarian?: boolean;
     isGlutenFree?: boolean;
+    prepTime?: string;
     origin?: string;
     category?: string;
 }

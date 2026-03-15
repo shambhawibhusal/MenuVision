@@ -60,7 +60,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [editPhone, setEditPhone] = useState('');
     const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
+    const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
     const [editFoodProfile, setEditFoodProfile] = useState<FoodProfile>(DEFAULT_FOOD_PROFILE);
     const [isSavingFoodProfile, setIsSavingFoodProfile] = useState(false);
 
@@ -87,7 +87,7 @@ const [showEditFoodProfile, setShowEditFoodProfile] = useState(false);
                     const updates: any = {};
                     if (!data.fullname && auth.currentUser.displayName) updates.fullname = auth.currentUser.displayName;
                     if (!data.email && auth.currentUser.email) updates.email = auth.currentUser.email;
-if (!data.uid) updates.uid = auth.currentUser.uid;
+                    if (!data.uid) updates.uid = auth.currentUser.uid;
 
                     if (Object.keys(updates).length > 0) {
                         console.log("Repairing user document fields:", updates);
@@ -180,7 +180,7 @@ if (!data.uid) updates.uid = auth.currentUser.uid;
         }
     };
 
-const deleteHistoryItem = async (item: HistoryItem) => {
+    const deleteHistoryItem = async (item: HistoryItem) => {
         if (!auth.currentUser) return;
 
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
@@ -200,7 +200,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
 
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
         const ratingKey = `dish_${dishName}`;
-        
+
         const newRating: DishRating = {
             userId: auth.currentUser.uid,
             rating,
@@ -220,7 +220,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
             await updateDoc(userDocRef, {
                 dishRatings: updatedRatings
             });
-            
+
             setUserRating(0);
             setFeedbackComment('');
         } catch (error) {
@@ -239,9 +239,18 @@ const deleteHistoryItem = async (item: HistoryItem) => {
     const [viewMode, setViewMode] = useState<'items' | 'text'>('items');
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
     const [searchText, setSearchText] = useState('');
+    const [activeFilters, setActiveFilters] = useState<{
+        isVegetarian: boolean;
+        isVegan: boolean;
+        isGlutenFree: boolean;
+    }>({
+        isVegetarian: false,
+        isVegan: false,
+        isGlutenFree: false
+    });
 
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-        { id: 1, text: "Hello! I am your Menu AI. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
+        { id: 1, text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
     ]);
     const [chatInput, setChatInput] = useState('');
 
@@ -249,9 +258,13 @@ const deleteHistoryItem = async (item: HistoryItem) => {
         return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10, globallyLikedDishes, foodProfile);
     }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes, foodProfile]);
 
-    const filteredDishes = recommendedDishes.filter(dish =>
-        dish.name.toLowerCase().includes(searchText.toLowerCase())
-    );
+    const filteredDishes = recommendedDishes.filter(dish => {
+        const matchesSearch = dish.name.toLowerCase().includes(searchText.toLowerCase());
+        const matchesVegetarian = !activeFilters.isVegetarian || dish.isVegetarian;
+        const matchesVegan = !activeFilters.isVegan || dish.isVegan;
+        const matchesGlutenFree = !activeFilters.isGlutenFree || dish.isGlutenFree;
+        return matchesSearch && matchesVegetarian && matchesVegan && matchesGlutenFree;
+    });
 
     // -- Camera Refs
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -346,6 +359,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                 place: restaurantName || 'Scanned Menu',
                 location: restaurantLocation || '',
                 calories: item.calories ? `${item.calories} kcal` : undefined,
+                prepTime: item.prepTime || item.preparationTime || item.cookingTime,
                 ingredients: Array.isArray(item.ingredients) ? item.ingredients.join(', ') : item.ingredients,
                 description: item.description,
                 imageUrl: item.imageUrl,
@@ -359,6 +373,12 @@ const deleteHistoryItem = async (item: HistoryItem) => {
             const extractedText = data.fullText || "";
 
             if (items.length > 0) {
+                const sanitizedItems = items.map((item: ScannedItem) => 
+                    Object.fromEntries(
+                        Object.entries(item).filter(([_, v]) => v !== undefined)
+                    )
+                ) as ScannedItem[];
+                
                 const newHistoryItem: HistoryItem = {
                     id: Date.now(),
                     place: restaurantName || 'Scanned Menu',
@@ -366,7 +386,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
                     items: items.slice(0, 2).map(i => i.name).join(', ') + (items.length > 2 ? '...' : ''),
                     total: `${items.length} dishes found`,
-                    scannedItems: items
+                    scannedItems: sanitizedItems
                 };
 
                 setHistoryItems(prev => [newHistoryItem, ...prev]);
@@ -599,7 +619,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                     </div>
                 )}
                 <main className="flex-1 overflow-y-auto z-[3] relative custom-scrollbar">
-{activeTab === 'home' && (
+                    {activeTab === 'home' && (
                         <HomeTab
                             searchText={searchText}
                             setSearchText={setSearchText}
@@ -609,10 +629,12 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                             toggleRecommendedLike={toggleRecommendedLike}
                             onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)}
                             dishRatings={dishRatings}
+                            activeFilters={activeFilters}
+                            setActiveFilters={setActiveFilters}
                         />
                     )}
                     {activeTab === 'results' && (
-<ResultsTab
+                        <ResultsTab
                             viewMode={viewMode}
                             setViewMode={setViewMode}
                             scannedItems={scannedItems}
@@ -642,7 +664,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                             onLogout={onLogout}
                         />
                     )}
-{activeTab === 'history' && (
+                    {activeTab === 'history' && (
                         <HistoryTab
                             historyItems={historyItems}
                             favoriteItems={favoriteItems}
@@ -666,7 +688,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
 
                 <nav className="h-20 bg-white/95 backdrop-blur-xl flex items-center px-4 z-[10] border-t border-gray-200">
                     <NavIcon name="home" label="Home" icon={<Home size={activeTab === 'home' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
-                    <NavIcon name="chat" label="AI Chat" icon={<MessageSquare size={activeTab === 'chat' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <NavIcon name="chat" label="Chat" icon={<MessageSquare size={activeTab === 'chat' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
                     <NavIcon name="history" label="History" icon={<History size={activeTab === 'history' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
                     <NavIcon name="profile" label="Me" icon={<User size={activeTab === 'profile' ? 24 : 22} />} activeTab={activeTab} setActiveTab={setActiveTab} />
                 </nav>
@@ -824,7 +846,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                     </DialogContent>
                 </Dialog>
 
-<Dialog open={!!selectedDish} onOpenChange={() => setSelectedDish(null)}>
+                <Dialog open={!!selectedDish} onOpenChange={() => setSelectedDish(null)}>
                     <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl max-h-[90vh]">
                         <div className="h-32 bg-amber-400 relative shrink-0">
                             {selectedDish?.imageUrl ? (
@@ -882,6 +904,10 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                                         <p className="text-gray-900 font-bold mt-1 text-lg">{selectedDish?.calories || 'N/A'}</p>
                                     </div>
                                     <div>
+                                        <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Prep Time</Label>
+                                        <p className="text-gray-900 font-bold mt-1 text-lg">{selectedDish?.prepTime || 'N/A'}</p>
+                                    </div>
+                                    <div>
                                         <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Origin</Label>
                                         <p className="text-gray-900 font-bold mt-1 text-lg">{selectedDish?.origin || 'Various'}</p>
                                     </div>
@@ -912,7 +938,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                                         </div>
                                     </>
                                 )}
-<Separator />
+                                <Separator />
                                 <div>
                                     <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Description</Label>
                                     <p className="text-gray-600 leading-relaxed mt-1 italic">"{selectedDish?.description || 'A delicious dish prepared with fresh ingredients.'}"</p>
@@ -924,9 +950,9 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                                     {getDishRating(selectedDish?.name || '') ? (
                                         <div className="bg-green-50 border border-green-200 rounded-xl p-4">
                                             <div className="flex items-center gap-2 mb-2">
-                                                <StarRating 
-                                                    rating={getDishRating(selectedDish?.name || '')?.rating || 0} 
-                                                    readonly 
+                                                <StarRating
+                                                    rating={getDishRating(selectedDish?.name || '')?.rating || 0}
+                                                    readonly
                                                     size={20}
                                                 />
                                                 <span className="text-sm font-medium text-green-700">You rated this!</span>
@@ -938,8 +964,8 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                                     ) : (
                                         <>
                                             <div className="flex justify-center py-2">
-                                                <StarRating 
-                                                    rating={userRating} 
+                                                <StarRating
+                                                    rating={userRating}
                                                     onRatingChange={setUserRating}
                                                     size={32}
                                                 />
@@ -952,7 +978,7 @@ const deleteHistoryItem = async (item: HistoryItem) => {
                                                         onChange={(e) => setFeedbackComment(e.target.value)}
                                                         className="h-12 rounded-xl"
                                                     />
-                                                    <Button 
+                                                    <Button
                                                         onClick={() => saveRating(selectedDish?.name || '', userRating, feedbackComment)}
                                                         className="w-full h-10 rounded-xl bg-amber-400 text-black font-bold hover:bg-amber-500"
                                                     >
