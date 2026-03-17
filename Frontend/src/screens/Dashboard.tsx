@@ -243,10 +243,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         isVegetarian: boolean;
         isVegan: boolean;
         isGlutenFree: boolean;
+        budget: string[];
+        prepTime: string[];
+        cuisine: string[];
     }>({
         isVegetarian: false,
         isVegan: false,
-        isGlutenFree: false
+        isGlutenFree: false,
+        budget: [],
+        prepTime: [],
+        cuisine: []
     });
 
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -263,7 +269,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const matchesVegetarian = !activeFilters.isVegetarian || dish.isVegetarian;
         const matchesVegan = !activeFilters.isVegan || dish.isVegan;
         const matchesGlutenFree = !activeFilters.isGlutenFree || dish.isGlutenFree;
-        return matchesSearch && matchesVegetarian && matchesVegan && matchesGlutenFree;
+        
+        const matchesBudget = activeFilters.budget.length === 0 || 
+            (dish.priceRange && activeFilters.budget.includes(dish.priceRange));
+        
+        const matchesCuisine = activeFilters.cuisine.length === 0 || 
+            (dish.cuisine && activeFilters.cuisine.some(c => dish.cuisine?.toLowerCase().includes(c.toLowerCase())));
+        
+        const matchesPrepTime = activeFilters.prepTime.length === 0 || 
+            (dish.prepTime && activeFilters.prepTime.some(pt => {
+                const prepMins = parseInt(dish.prepTime?.replace(/\D/g, '') || '0');
+                if (pt === 'under15') return prepMins < 15;
+                if (pt === 'under30') return prepMins < 30;
+                return true;
+            }));
+        
+        return matchesSearch && matchesVegetarian && matchesVegan && matchesGlutenFree && matchesBudget && matchesCuisine && matchesPrepTime;
     });
 
     // -- Camera Refs

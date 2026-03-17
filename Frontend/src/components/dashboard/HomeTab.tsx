@@ -19,11 +19,17 @@ interface HomeTabProps {
         isVegetarian: boolean;
         isVegan: boolean;
         isGlutenFree: boolean;
+        budget: string[];
+        prepTime: string[];
+        cuisine: string[];
     };
     setActiveFilters: (filters: {
         isVegetarian: boolean;
         isVegan: boolean;
         isGlutenFree: boolean;
+        budget: string[];
+        prepTime: string[];
+        cuisine: string[];
     }) => void;
 }
 
@@ -56,7 +62,28 @@ const HomeTab: React.FC<HomeTabProps> = ({
         setActiveFilters(prev => ({ ...prev, [filter]: !prev[filter] }));
     };
 
-    const hasActiveFilters = activeFilters.isVegetarian || activeFilters.isVegan || activeFilters.isGlutenFree;
+    const toggleArrayFilter = (filter: 'budget' | 'prepTime' | 'cuisine', value: string) => {
+        setActiveFilters(prev => ({
+            ...prev,
+            [filter]: prev[filter].includes(value)
+                ? prev[filter].filter(v => v !== value)
+                : [...prev[filter], value]
+        }));
+    };
+
+    const clearAllFilters = () => {
+        setActiveFilters({
+            isVegetarian: false,
+            isVegan: false,
+            isGlutenFree: false,
+            budget: [],
+            prepTime: [],
+            cuisine: []
+        });
+    };
+
+    const hasActiveFilters = activeFilters.isVegetarian || activeFilters.isVegan || activeFilters.isGlutenFree || 
+        activeFilters.budget.length > 0 || activeFilters.prepTime.length > 0 || activeFilters.cuisine.length > 0;
     return (
         <div className="p-5 pt-8 animate-fade">
             <div className="relative mb-8 group flex items-center gap-2">
@@ -79,21 +106,22 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         <SlidersHorizontal size={22} />
                     </Button>
                     {showFilters && (
-                        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 p-3 z-50">
+                        <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-lg border border-gray-200 p-3 z-50 max-h-[70vh] overflow-y-auto">
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-sm font-semibold text-gray-700">Filters</span>
                                 {hasActiveFilters && (
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => setActiveFilters({ isVegetarian: false, isVegan: false, isGlutenFree: false })}
+                                        onClick={clearAllFilters}
                                         className="text-xs text-amber-600 hover:text-amber-700 h-6 px-2"
                                     >
                                         Clear all
                                     </Button>
                                 )}
                             </div>
-                            <div className="space-y-2">
+                            
+                            <div className="space-y-3">
                                 <button
                                     onClick={() => toggleFilter('isVegetarian')}
                                     className={`w-full p-3 rounded-lg border-2 transition-all flex items-center gap-3 ${activeFilters.isVegetarian ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}
@@ -124,6 +152,65 @@ const HomeTab: React.FC<HomeTabProps> = ({
                                     <span className="font-medium text-gray-700">Gluten-Free</span>
                                     {activeFilters.isGlutenFree && <X size={16} className="ml-auto text-amber-500" />}
                                 </button>
+                            </div>
+
+                            <div className="border-t border-gray-200 my-3"></div>
+
+                            <div className="space-y-2">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Budget</span>
+                                {[
+                                    { value: 'budget', label: 'Under Rs 150' },
+                                    { value: 'moderate', label: 'Rs 150 – Rs 300' },
+                                    { value: 'expensive', label: 'Rs 300 – Rs 500' },
+                                    { value: 'premium', label: 'Above Rs 500' }
+                                ].map(item => (
+                                    <label key={item.value} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={activeFilters.budget.includes(item.value)}
+                                            onChange={() => toggleArrayFilter('budget', item.value)}
+                                            className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className="text-sm text-gray-700">{item.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="border-t border-gray-200 my-3"></div>
+
+                            <div className="space-y-2">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Preparation Time</span>
+                                {[
+                                    { value: 'under15', label: 'Under 15 min' },
+                                    { value: 'under30', label: 'Under 30 min' }
+                                ].map(item => (
+                                    <label key={item.value} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={activeFilters.prepTime.includes(item.value)}
+                                            onChange={() => toggleArrayFilter('prepTime', item.value)}
+                                            className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className="text-sm text-gray-700">{item.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="border-t border-gray-200 my-3"></div>
+
+                            <div className="space-y-2">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cuisine</span>
+                                {['Nepali', 'Indian', 'Chinese'].map(cuisine => (
+                                    <label key={cuisine} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={activeFilters.cuisine.includes(cuisine)}
+                                            onChange={() => toggleArrayFilter('cuisine', cuisine)}
+                                            className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className="text-sm text-gray-700">{cuisine}</span>
+                                    </label>
+                                ))}
                             </div>
                         </div>
                     )}

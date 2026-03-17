@@ -62,28 +62,27 @@ interface AnalyzeMenuRequestBody {
     imageBase64?: string;
 }
 
-async function fetchPexelsImage(dishName: string): Promise<string | null> {
-    const pexelsKey = process.env.PEXELS_API_KEY;
-    console.log(`[Pexels] Fetching image for: "${dishName}", Key exists: ${!!pexelsKey}`);
-    if (!pexelsKey) return null;
+async function fetchPixabayImage(dishName: string): Promise<string | null> {
+    const pixabayKey = process.env.PIXABAY_API_KEY;
+    console.log(`[Pixabay] Fetching image for: "${dishName}", Key exists: ${!!pixabayKey}`);
+    if (!pixabayKey) return null;
 
     try {
-        const pexelsRes = await fetch(
-            `https://api.pexels.com/v1/search?query=${encodeURIComponent(dishName + " food")}&per_page=1&orientation=landscape`,
-            { headers: { Authorization: pexelsKey } }
+        const pixabayRes = await fetch(
+            `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(dishName + " food")}&per_page=3&orientation=horizontal&image_type=photo`
         );
-        console.log(`[Pexels] Response status for "${dishName}": ${pexelsRes.status}`);
-        if (pexelsRes.ok) {
-            const pexelsData = await pexelsRes.json() as { photos: Array<{ src: { medium: string } }> };
-            const url = pexelsData.photos?.[0]?.src?.medium ?? null;
-            console.log(`[Pexels] Image URL for "${dishName}": ${url}`);
+        console.log(`[Pixabay] Response status for "${dishName}": ${pixabayRes.status}`);
+        if (pixabayRes.ok) {
+            const pixabayData = await pixabayRes.json() as { hits: Array<{ webformatURL: string; largeImageURL: string }> };
+            const url = pixabayData.hits?.[0]?.webformatURL ?? null;
+            console.log(`[Pixabay] Image URL for "${dishName}": ${url}`);
             return url;
         } else {
-            const errorText = await pexelsRes.text();
-            console.warn(`[Pexels] Error response: ${errorText}`);
+            const errorText = await pixabayRes.text();
+            console.warn(`[Pixabay] Error response: ${errorText}`);
         }
     } catch (err) {
-        console.warn(`Pexels fetch failed for "${dishName}":`, err);
+        console.warn(`Pixabay fetch failed for "${dishName}":`, err);
     }
     return null;
 }
@@ -124,7 +123,7 @@ NEVER return null or empty values for ingredients, calories, or description - al
         const menuItemsWithImages = await Promise.all(
             object.menuItems.map(async (item) => ({
                 ...item,
-                imageUrl: await fetchPexelsImage(item.name),
+                imageUrl: await fetchPixabayImage(item.name),
             }))
         );
 
@@ -180,23 +179,22 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         const jsonContent = jsonMatch ? jsonMatch[0] : text;
         const object = JSON.parse(jsonContent);
 
-        // Fetch a dish image from Unsplash
+        // Fetch a dish image from Pixabay
         let imageUrl: string | null = null;
         try {
             const dishName = object.name || message;
-            const pexelsKey = process.env.PEXELS_API_KEY;
-            if (pexelsKey) {
-                const pexelsRes = await fetch(
-                    `https://api.pexels.com/v1/search?query=${encodeURIComponent(dishName + " food")}&per_page=1&orientation=landscape`,
-                    { headers: { Authorization: pexelsKey } }
+            const pixabayKey = process.env.PIXABAY_API_KEY;
+            if (pixabayKey) {
+                const pixabayRes = await fetch(
+                    `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(dishName + " food")}&per_page=3&orientation=horizontal&image_type=photo`
                 );
-                if (pexelsRes.ok) {
-                    const pexelsData = await pexelsRes.json() as { photos: Array<{ src: { medium: string } }> };
-                    imageUrl = pexelsData.photos?.[0]?.src?.medium ?? null;
+                if (pixabayRes.ok) {
+                    const pixabayData = await pixabayRes.json() as { hits: Array<{ webformatURL: string }> };
+                    imageUrl = pixabayData.hits?.[0]?.webformatURL ?? null;
                 }
             }
         } catch (imgErr) {
-            console.warn("Pexels fetch failed (non-fatal):", imgErr);
+            console.warn("Pixabay fetch failed (non-fatal):", imgErr);
         }
 
         res.json({

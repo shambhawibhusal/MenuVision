@@ -27,6 +27,7 @@ export function useDishes() {
                         tags: data.tags || [],
                         priceRange: data.priceRange || 'moderate',
                         calories: data.calories,
+                        prepTime: data.prepTime,
                         description: data.description,
                         ingredients: data.ingredients,
                         imageUrl: data.imageUrl,
