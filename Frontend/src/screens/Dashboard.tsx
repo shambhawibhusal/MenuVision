@@ -984,7 +984,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                         </div>
                                     ) : (
                                         <>
-                                            <div className="flex justify-center py-2">
+                                            <div className="flex flex-col items-center gap-3 py-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        max={5}
+                                                        step={0.5}
+                                                        value={userRating || ''}
+                                                        onChange={(e) => {
+                                                            const val = parseFloat(e.target.value);
+                                                            if (val >= 1 && val <= 5) {
+                                                                setUserRating(val);
+                                                            } else if (e.target.value === '') {
+                                                                setUserRating(0);
+                                                            }
+                                                        }}
+                                                        className="w-20 h-10 text-center font-bold"
+                                                        placeholder="1-5"
+                                                    />
+                                                    <span className="text-sm text-gray-500">rate 1-5</span>
+                                                </div>
                                                 <StarRating
                                                     rating={userRating}
                                                     onRatingChange={setUserRating}
