@@ -4,7 +4,7 @@ export interface ScannedItem {
     place?: string;
     location?: string;
     calories?: string;
-    ingredients?: string;
+    ingredients?: string | string[];
     description?: string;
     imageUrl?: string | null;
     allergens?: string[];
@@ -28,7 +28,7 @@ export interface Dish extends ScannedItem {
     place: string;
     cuisine?: string;
     tags?: string[];
-    priceRange?: 'budget' | 'moderate' | 'expensive';
+    priceRange?: 'budget' | 'moderate' | 'expensive' | 'premium';
     ratings?: DishRating[];
     averageRating?: number;
 }

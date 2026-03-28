@@ -42,11 +42,12 @@ function extractPriceValue(price: string): number {
     return match ? parseInt(match[1], 10) : 0;
 }
 
-function getPriceRange(price: string): 'budget' | 'moderate' | 'expensive' {
+function getPriceRange(price: string): 'budget' | 'moderate' | 'expensive' | 'premium' {
     const value = extractPriceValue(price);
-    if (value <= 300) return 'budget';
-    if (value <= 700) return 'moderate';
-    return 'expensive';
+    if (value < 150) return 'budget';
+    if (value <= 300) return 'moderate';
+    if (value <= 500) return 'expensive';
+    return 'premium';
 }
 
 function normalizeTags(dish: Dish): string[] {
@@ -72,11 +73,12 @@ function normalizeTags(dish: Dish): string[] {
     }
     
     if (dish.ingredients) {
-        const ingredients = typeof dish.ingredients === 'string' 
-            ? dish.ingredients.toLowerCase().split(/,\s*/)
-            : [];
+        const ingredients = Array.isArray(dish.ingredients)
+            ? dish.ingredients
+            : dish.ingredients.toLowerCase().split(/,\s*/);
         ingredients.forEach((ing: string) => {
-            if (ing.length > 2) tags.add(ing.trim());
+            const trimmed = ing.trim().toLowerCase();
+            if (trimmed.length > 2) tags.add(trimmed);
         });
     }
     
@@ -117,7 +119,6 @@ export function getRecommendations(
     globallyLikedDishes?: Dish[],
     foodProfile?: FoodProfile
 ): Dish[] {
-    const likedIds = new Set(likedDishes.map(d => d.id));
     const excludedIds = new Set([...unlikedDishIds]);
 
     const result: Dish[] = [];
@@ -222,7 +223,7 @@ export function getRecommendations(
         }
     });
     
-    return uniqueResult;
+    return uniqueResult.slice(0, maxRecommendations);
 }
 
 export function getDishById(dishes: Dish[], id: number): Dish | undefined {

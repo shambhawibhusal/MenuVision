@@ -1,51 +1,69 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, query } from 'firebase/firestore';
 import { db, auth } from '@/firebase';
 import { Dish } from '@/types/dashboard';
+
+function dishesToKey(dishes: Dish[]): string {
+    return dishes.map(d => d.id).sort().join(',');
+}
 
 export function useGloballyLikedDishes() {
     const [globallyLikedDishes, setGloballyLikedDishes] = useState<Dish[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const prevKeyRef = useRef<string>('');
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const usersCollection = collection(db, 'users');
         const q = query(usersCollection);
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            try {
-                const dishMap = new Map<number, Dish>();
-                const currentUserId = auth.currentUser?.uid;
+            if (debounceRef.current) clearTimeout(debounceRef.current);
 
-                snapshot.docs.forEach(userDoc => {
-                    const userData = userDoc.data();
-                    const favorites: Dish[] = userData.favorites || [];
+            debounceRef.current = setTimeout(() => {
+                try {
+                    const dishMap = new Map<number, Dish>();
+                    const currentUserId = auth.currentUser?.uid;
 
-                    // Skip current user's own likes - they are handled separately
-                    if (userDoc.id === currentUserId) return;
+                    snapshot.docs.forEach(userDoc => {
+                        const userData = userDoc.data();
+                        const favorites: Dish[] = userData.favorites || [];
 
-                    favorites.forEach((dish: Dish) => {
-                        if (dish.id && !dishMap.has(dish.id)) {
-                            dishMap.set(dish.id, dish);
-                        }
+                        if (userDoc.id === currentUserId) return;
+
+                        favorites.forEach((dish: Dish) => {
+                            if (dish.id && !dishMap.has(dish.id)) {
+                                dishMap.set(dish.id, dish);
+                            }
+                        });
                     });
-                });
 
-                setGloballyLikedDishes(Array.from(dishMap.values()));
-                setError(null);
-            } catch (err: any) {
-                console.error('Error fetching globally liked dishes:', err);
-                setError(err.message || 'Failed to fetch globally liked dishes');
-            } finally {
-                setLoading(false);
-            }
+                    const result = Array.from(dishMap.values());
+                    const newKey = dishesToKey(result);
+
+                    if (newKey !== prevKeyRef.current) {
+                        prevKeyRef.current = newKey;
+                        setGloballyLikedDishes(result);
+                    }
+                    setError(null);
+                } catch (err: any) {
+                    console.error('Error fetching globally liked dishes:', err);
+                    setError(err.message || 'Failed to fetch globally liked dishes');
+                } finally {
+                    setLoading(false);
+                }
+            }, 300);
         }, (err) => {
             console.error('Error in globally liked dishes listener:', err);
             setError(err.message || 'Failed to listen to globally liked dishes');
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            if (debounceRef.current) clearTimeout(debounceRef.current);
+            unsubscribe();
+        };
     }, []);
 
     return { globallyLikedDishes, loading, error };
