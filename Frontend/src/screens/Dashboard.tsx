@@ -23,7 +23,7 @@ import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, 
 
 import { useDishes } from '@/hooks/useDishes';
 import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
-import { getRecommendations } from '../utils/recommendations';
+import { getRecommendations, getPriceRange } from '../utils/recommendations';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -270,8 +270,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const matchesVegan = !activeFilters.isVegan || dish.isVegan;
         const matchesGlutenFree = !activeFilters.isGlutenFree || dish.isGlutenFree;
         
+        const budgetValue = dish.priceRange || getPriceRange(dish.price);
         const matchesBudget = activeFilters.budget.length === 0 || 
-            (dish.priceRange && activeFilters.budget.includes(dish.priceRange));
+            activeFilters.budget.includes(budgetValue);
         
         const cuisineValue = dish.cuisine || dish.origin;
         const matchesCuisine = activeFilters.cuisine.length === 0 || 

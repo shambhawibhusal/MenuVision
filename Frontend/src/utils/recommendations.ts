@@ -37,12 +37,12 @@ function matchesFoodProfile(dish: Dish, foodProfile: FoodProfile): boolean {
     return true;
 }
 
-function extractPriceValue(price: string): number {
+export function extractPriceValue(price: string): number {
     const match = price.match(/(\d+)/);
     return match ? parseInt(match[1], 10) : 0;
 }
 
-function getPriceRange(price: string): 'budget' | 'moderate' | 'expensive' | 'premium' {
+export function getPriceRange(price: string): 'budget' | 'moderate' | 'expensive' | 'premium' {
     const value = extractPriceValue(price);
     if (value < 150) return 'budget';
     if (value <= 300) return 'moderate';
