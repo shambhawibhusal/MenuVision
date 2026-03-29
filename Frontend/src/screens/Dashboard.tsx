@@ -273,8 +273,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const matchesBudget = activeFilters.budget.length === 0 || 
             (dish.priceRange && activeFilters.budget.includes(dish.priceRange));
         
+        const cuisineValue = dish.cuisine || dish.origin;
         const matchesCuisine = activeFilters.cuisine.length === 0 || 
-            (dish.cuisine && activeFilters.cuisine.some(c => dish.cuisine?.toLowerCase().includes(c.toLowerCase())));
+            (cuisineValue && activeFilters.cuisine.some(c => cuisineValue.toLowerCase().includes(c.toLowerCase())));
         
         const matchesPrepTime = activeFilters.prepTime.length === 0 || 
             (dish.prepTime && activeFilters.prepTime.some(pt => {
@@ -389,6 +390,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 isVegetarian: item.isVegetarian,
                 isGlutenFree: item.isGlutenFree,
                 origin: item.origin,
+                cuisine: item.origin,
                 category: item.category
             }));
             const extractedText = data.fullText || "";
