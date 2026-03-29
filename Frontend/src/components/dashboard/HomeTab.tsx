@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Camera, Leaf, X, SlidersHorizontal } from "lucide-react";
+import { Search, Camera, Leaf, X, SlidersHorizontal, MapPin, Loader2, Star } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,15 +22,20 @@ interface HomeTabProps {
         budget: string[];
         prepTime: string[];
         cuisine: string[];
+        location: string;
+        rating: string;
     };
-    setActiveFilters: (filters: {
+    setActiveFilters: React.Dispatch<React.SetStateAction<{
         isVegetarian: boolean;
         isVegan: boolean;
         isGlutenFree: boolean;
         budget: string[];
         prepTime: string[];
         cuisine: string[];
-    }) => void;
+        location: string;
+        rating: string;
+    }>>;
+    locationLoading?: boolean;
 }
 
 const HomeTab: React.FC<HomeTabProps> = ({
@@ -43,7 +48,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
     onSelectDish,
     dishRatings = {},
     activeFilters,
-    setActiveFilters
+    setActiveFilters,
+    locationLoading = false
 }) => {
     const [showFilters, setShowFilters] = useState(false);
     const filterRef = useRef<HTMLDivElement>(null);
@@ -78,12 +84,14 @@ const HomeTab: React.FC<HomeTabProps> = ({
             isGlutenFree: false,
             budget: [],
             prepTime: [],
-            cuisine: []
+            cuisine: [],
+            location: '',
+            rating: ''
         });
     };
 
     const hasActiveFilters = activeFilters.isVegetarian || activeFilters.isVegan || activeFilters.isGlutenFree || 
-        activeFilters.budget.length > 0 || activeFilters.prepTime.length > 0 || activeFilters.cuisine.length > 0;
+        activeFilters.budget.length > 0 || activeFilters.prepTime.length > 0 || activeFilters.cuisine.length > 0 || activeFilters.location !== '' || activeFilters.rating !== '';
     return (
         <div className="p-5 pt-8 animate-fade">
             <div className="relative mb-8 group flex items-center gap-2">
@@ -209,6 +217,64 @@ const HomeTab: React.FC<HomeTabProps> = ({
                                             className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
                                         />
                                         <span className="text-sm text-gray-700">{cuisine}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="border-t border-gray-200 my-3"></div>
+
+                            <div className="space-y-2">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Location</span>
+                                {[
+                                    { value: 'nearby', label: 'Near me', icon: <MapPin size={14} /> },
+                                    { value: 'kathmandu', label: 'Kathmandu', icon: <MapPin size={14} /> },
+                                    { value: 'within2km', label: 'Within 2 km', icon: <MapPin size={14} /> }
+                                ].map(item => (
+                                    <label key={item.value} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="location"
+                                            checked={activeFilters.location === item.value}
+                                            onChange={() => setActiveFilters(prev => ({
+                                                ...prev,
+                                                location: prev.location === item.value ? '' : item.value
+                                            }))}
+                                            className="w-4 h-4 border-gray-300 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className="text-sm text-gray-700 flex items-center gap-1.5">
+                                            {item.icon} {item.label}
+                                        </span>
+                                        {activeFilters.location === item.value && locationLoading && (
+                                            <Loader2 size={14} className="animate-spin text-amber-500 ml-auto" />
+                                        )}
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="border-t border-gray-200 my-3"></div>
+
+                            <div className="space-y-2">
+                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Rating</span>
+                                {[
+                                    { value: 'rated', label: 'Rated only' },
+                                    { value: '3', label: '3+ stars' },
+                                    { value: '4', label: '4+ stars' },
+                                    { value: '4.5', label: '4.5+ stars' }
+                                ].map(item => (
+                                    <label key={item.value} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="rating"
+                                            checked={activeFilters.rating === item.value}
+                                            onChange={() => setActiveFilters(prev => ({
+                                                ...prev,
+                                                rating: prev.rating === item.value ? '' : item.value
+                                            }))}
+                                            className="w-4 h-4 border-gray-300 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className="text-sm text-gray-700 flex items-center gap-1.5">
+                                            <Star size={14} className="text-amber-400" /> {item.label}
+                                        </span>
                                     </label>
                                 ))}
                             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { ChatMessage } from '@/types/dashboard';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
@@ -246,14 +246,55 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         budget: string[];
         prepTime: string[];
         cuisine: string[];
+        location: string;
+        rating: string;
     }>({
         isVegetarian: false,
         isVegan: false,
         isGlutenFree: false,
         budget: [],
         prepTime: [],
-        cuisine: []
+        cuisine: [],
+        location: '',
+        rating: ''
     });
+
+    const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; city: string } | null>(null);
+    const [locationLoading, setLocationLoading] = useState(false);
+
+    useEffect(() => {
+        if (activeFilters.location !== 'nearby' && activeFilters.location !== 'within2km') return;
+        if (userLocation) return;
+
+        if (!navigator.geolocation) {
+            console.warn('Geolocation not supported');
+            return;
+        }
+
+        setLocationLoading(true);
+        navigator.geolocation.getCurrentPosition(
+            async (position) => {
+                const { latitude, longitude } = position.coords;
+                try {
+                    const res = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
+                        { headers: { 'User-Agent': 'MenuVision/1.0' } }
+                    );
+                    const data = await res.json();
+                    const city = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
+                    setUserLocation({ lat: latitude, lng: longitude, city });
+                } catch {
+                    setUserLocation({ lat: latitude, lng: longitude, city: '' });
+                } finally {
+                    setLocationLoading(false);
+                }
+            },
+            () => {
+                setLocationLoading(false);
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    }, [activeFilters.location, userLocation]);
 
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         { id: 1, text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
@@ -285,8 +326,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 if (pt === 'under30') return prepMins < 30;
                 return true;
             }));
-        
-        return matchesSearch && matchesVegetarian && matchesVegan && matchesGlutenFree && matchesBudget && matchesCuisine && matchesPrepTime;
+
+        let matchesLocation = true;
+        if (activeFilters.location === 'kathmandu') {
+            matchesLocation = !!dish.location && dish.location.toLowerCase().includes('kathmandu');
+        } else if (activeFilters.location === 'nearby') {
+            if (userLocation?.city) {
+                const loc = (dish.location || '').toLowerCase();
+                const city = userLocation.city.toLowerCase();
+                matchesLocation = loc.includes(city);
+            } else {
+                matchesLocation = !locationLoading;
+            }
+        } else if (activeFilters.location === 'within2km') {
+            if (dish.latitude != null && dish.longitude != null && userLocation) {
+                const R = 6371;
+                const dLat = (dish.latitude - userLocation.lat) * Math.PI / 180;
+                const dLng = (dish.longitude - userLocation.lng) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) ** 2 +
+                    Math.cos(userLocation.lat * Math.PI / 180) * Math.cos(dish.latitude * Math.PI / 180) *
+                    Math.sin(dLng / 2) ** 2;
+                const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                matchesLocation = dist <= 2;
+            } else if (userLocation?.city) {
+                const loc = (dish.location || '').toLowerCase();
+                const city = userLocation.city.toLowerCase();
+                matchesLocation = loc.includes(city);
+            } else {
+                matchesLocation = !locationLoading;
+            }
+        }
+
+        let matchesRating = true;
+        if (activeFilters.rating) {
+            const ratingKey = `dish_${dish.name}`;
+            const dishRating = dishRatings[ratingKey]?.rating || 0;
+            if (activeFilters.rating === 'rated') {
+                matchesRating = dishRating > 0;
+            } else {
+                const minRating = parseFloat(activeFilters.rating);
+                matchesRating = dishRating >= minRating;
+            }
+        }
+
+        return matchesSearch && matchesVegetarian && matchesVegan && matchesGlutenFree && matchesBudget && matchesCuisine && matchesPrepTime && matchesLocation && matchesRating;
     });
 
     // -- Camera Refs
@@ -655,6 +738,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             dishRatings={dishRatings}
                             activeFilters={activeFilters}
                             setActiveFilters={setActiveFilters}
+                            locationLoading={locationLoading}
                         />
                     )}
                     {activeTab === 'results' && (

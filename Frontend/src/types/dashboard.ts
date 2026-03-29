@@ -31,6 +31,8 @@ export interface Dish extends ScannedItem {
     priceRange?: 'budget' | 'moderate' | 'expensive' | 'premium';
     ratings?: DishRating[];
     averageRating?: number;
+    latitude?: number;
+    longitude?: number;
 }
 
 export interface HistoryItem {
