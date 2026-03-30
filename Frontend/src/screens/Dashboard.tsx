@@ -23,7 +23,9 @@ import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, 
 
 import { useDishes } from '@/hooks/useDishes';
 import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
+import { useDebounce } from '@/hooks/useDebounce';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
+import { searchDishes } from '../utils/search';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -245,6 +247,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [viewMode, setViewMode] = useState<'items' | 'text'>('items');
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
     const [searchText, setSearchText] = useState('');
+    const debouncedSearch = useDebounce(searchText, 250);
+    const [sortBy, setSortBy] = useState<string>('relevance');
     const [activeFilters, setActiveFilters] = useState<{
         isVegetarian: boolean;
         isVegan: boolean;
@@ -311,8 +315,45 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10, globallyLikedDishes, foodProfile);
     }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes, foodProfile]);
 
-    const filteredDishes = recommendedDishes.filter(dish => {
-        const matchesSearch = dish.name.toLowerCase().includes(searchText.toLowerCase());
+    const searchableDishes = useMemo(() => {
+        const seen = new Set<string>();
+        const pool: Dish[] = [];
+
+        const addDish = (dish: Dish) => {
+            const key = `${dish.name.toLowerCase()}__${(dish.place || '').toLowerCase()}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                pool.push(dish);
+            }
+        };
+
+        allDishes.forEach(addDish);
+        favoriteItems.forEach(addDish);
+        historyItems.forEach(item => {
+            if (item.scannedItems) {
+                item.scannedItems.forEach((scanned, idx) => {
+                    const dish: Dish = {
+                        ...scanned,
+                        id: item.id * 1000 + idx,
+                        place: scanned.place || item.place || 'Scanned Menu',
+                        price: scanned.price || ''
+                    };
+                    addDish(dish);
+                });
+            }
+        });
+
+        return pool;
+    }, [allDishes, favoriteItems, historyItems]);
+
+    const filteredDishes = useMemo(() => {
+        const baseList = debouncedSearch.trim()
+            ? searchDishes(searchableDishes, debouncedSearch)
+            : recommendedDishes;
+
+        let results = baseList;
+
+        results = results.filter(dish => {
         const matchesVegetarian = !activeFilters.isVegetarian || dish.isVegetarian;
         const matchesVegan = !activeFilters.isVegan || dish.isVegan;
         const matchesGlutenFree = !activeFilters.isGlutenFree || dish.isGlutenFree;
@@ -375,8 +416,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             }
         }
 
-        return matchesSearch && matchesVegetarian && matchesVegan && matchesGlutenFree && matchesBudget && matchesCuisine && matchesPrepTime && matchesLocation && matchesRating;
-    });
+        return matchesVegetarian && matchesVegan && matchesGlutenFree && matchesBudget && matchesCuisine && matchesPrepTime && matchesLocation && matchesRating;
+        });
+
+        if (sortBy === 'price-low') {
+            results.sort((a, b) => {
+                const priceA = parseFloat((a.price || '0').replace(/[^0-9.]/g, '')) || 0;
+                const priceB = parseFloat((b.price || '0').replace(/[^0-9.]/g, '')) || 0;
+                return priceA - priceB;
+            });
+        } else if (sortBy === 'price-high') {
+            results.sort((a, b) => {
+                const priceA = parseFloat((a.price || '0').replace(/[^0-9.]/g, '')) || 0;
+                const priceB = parseFloat((b.price || '0').replace(/[^0-9.]/g, '')) || 0;
+                return priceB - priceA;
+            });
+        } else if (sortBy === 'rating') {
+            results.sort((a, b) => {
+                const ratingA = dishRatings[`dish_${a.name}`]?.rating || 0;
+                const ratingB = dishRatings[`dish_${b.name}`]?.rating || 0;
+                return ratingB - ratingA;
+            });
+        } else if (sortBy === 'prep-time') {
+            results.sort((a, b) => {
+                const timeA = parseInt(a.prepTime?.replace(/\D/g, '') || '999');
+                const timeB = parseInt(b.prepTime?.replace(/\D/g, '') || '999');
+                return timeA - timeB;
+            });
+        }
+
+        return results;
+    }, [recommendedDishes, searchableDishes, debouncedSearch, activeFilters, dishRatings, sortBy]);
 
     // -- Camera Refs
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -745,6 +815,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             activeFilters={activeFilters}
                             setActiveFilters={setActiveFilters}
                             locationLoading={locationLoading}
+                            allDishes={searchableDishes}
+                            sortBy={sortBy}
+                            setSortBy={setSortBy}
                         />
                     )}
                     {activeTab === 'results' && (
