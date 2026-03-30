@@ -132,10 +132,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     unliked: arrayUnion(dish.id)
                 });
             } else {
+                const cleanedDish = Object.fromEntries(
+                    Object.entries(dish).filter(([, v]) => v !== undefined)
+                );
                 setFavoriteItems(prev => [...prev, dish]);
                 setUnlikedDishIds(prev => prev.filter(id => id !== dish.id));
                 await updateDoc(userDocRef, {
-                    favorites: arrayUnion(dish)
+                    favorites: arrayUnion(cleanedDish)
                 });
             }
         } catch (error) {
@@ -170,9 +173,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     place: item.place || 'Scanned Menu',
                     price: item.price || ''
                 };
+                const cleanedDish = Object.fromEntries(
+                    Object.entries(newDish).filter(([, v]) => v !== undefined)
+                );
                 setFavoriteItems(prev => [...prev, newDish]);
                 await updateDoc(userDocRef, {
-                    favorites: arrayUnion(newDish)
+                    favorites: arrayUnion(cleanedDish)
                 });
             }
         } catch (error) {
