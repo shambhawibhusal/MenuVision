@@ -397,53 +397,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
-        try {
-            let position: GeolocationPosition;
-            try {
-                position = await tryGeolocation(false);
-            } catch {
-                position = await tryGeolocation(true);
-            }
-
-            const { latitude, longitude } = position.coords;
-            const res = await fetch(
-                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
-                { headers: { 'User-Agent': 'MenuVision/1.0' } }
-            );
-
-            if (!res.ok) throw new Error('Reverse geocoding failed');
-
-            const data = await res.json();
-            const addressParts = [];
-            if (data.address?.road) addressParts.push(data.address.road);
-            if (data.address?.neighbourhood) addressParts.push(data.address.neighbourhood);
-            if (data.address?.city || data.address?.town || data.address?.village) {
-                addressParts.push(data.address.city || data.address.town || data.address.village);
-            }
-            if (data.address?.country) addressParts.push(data.address.country);
-            
-            if (addressParts.length > 0) {
-                setRestaurantLocation(addressParts.join(', '));
-            } else {
-                setLocationError('Could not resolve address for your location');
-                setTimeout(() => setLocationError(''), 3000);
-            }
-        } catch (err: any) {
-            if (err?.code === 1) {
-                setLocationError('Location permission denied. Please allow location access in browser settings.');
-            } else if (err?.code === 2) {
-                setLocationError('Location unavailable. Please ensure location services are enabled.');
-            } else if (err?.code === 3) {
-                setLocationError('Location request timed out. Please try again.');
-            } else {
-                setLocationError('Could not detect location. Please enter manually.');
-            }
-            setTimeout(() => setLocationError(''), 5000);
-        } finally {
-            setDetectingLocation(false);
-        }
-    };
-
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         { id: 1, text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
     ]);

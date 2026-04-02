@@ -5,7 +5,6 @@ import { Heart, MapPin, Star, Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
 import { normalizePrice } from '@/utils/recommendations';
-import { normalizePrice } from '@/utils/recommendations';
 
 interface MenuCardProps {
     item: ScannedItem;
