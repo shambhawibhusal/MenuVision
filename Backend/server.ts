@@ -45,6 +45,7 @@ const FoodItemSchema = z.object({
     ingredients: z.array(z.string()),
     allergens: z.array(z.string()),
     calories: z.number().nullable(),
+    preparationTime: z.number().nullable(),
     origin: z.string().nullable(),
     isVegan: z.boolean().nullable(),
     isVegetarian: z.boolean().nullable(),
@@ -98,17 +99,19 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
         const { object } = await generateObject({
             model: model,
             schema: MenuSchema,
-            system: `You are an expert menu scanner and culinary AI assistant. Your job is to:
-1. Extract all visible menu items from the image (name, price, category if visible)
-2. For each dish, INFER realistic data based on the dish name and cuisine type:
-   - ingredients: List 5-10 typical ingredients for this dish (be specific and realistic)
-   - calories: Estimate realistic calorie count in kcal (e.g., 450)
-   - description: Write a brief, appetizing 1-2 sentence description of the dish
-   - allergens: List common allergens present (e.g., Dairy, Gluten, Nuts)
-   - origin: The cuisine origin (e.g., Italian, Japanese, Indian)
-   - isVegan/isVegetarian/isGlutenFree: Determine based on the dish
+system: `You are an expert menu scanner and culinary AI assistant. Your job is to:
+ 1. Extract all visible menu items from the image (name, price, category if visible)
+ 2. For each dish, INFER realistic data based on the dish name and cuisine type:
+    - ingredients: List 5-10 typical ingredients for this dish (be specific and realistic)
+    - calories: Estimate realistic calorie count in kcal (e.g., 450)
+    - preparationTime: Estimate realistic preparation time in minutes (e.g., 15, 20, 30)
+    - description: Write a brief, appetizing 1-2 sentence description of the dish
+    - allergens: List common allergens present (e.g., Dairy, Gluten, Nuts)
+    - origin: The cuisine origin (e.g., Italian, Japanese, Indian)
+    - isVegan/isVegetarian/isGlutenFree: Determine based on the dish
+    - price: If not visible in the image, estimate a realistic price in Nepalese Rupees (NPR). Format as "Rs. XXX" (e.g., "Rs. 250", "Rs. 450")
 
-NEVER return null or empty values for ingredients, calories, or description - always infer reasonable values based on the dish name. Be creative but realistic with your estimates.`,
+NEVER return null or empty values for ingredients, calories, preparationTime, or description - always infer reasonable values based on the dish name. Be creative but realistic with your estimates.`,
             messages: [
                 {
                     role: "user",
@@ -157,16 +160,17 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
 
         const { text } = await generateText({
             model: model,
-            system: "You are a helpful food expert AI. Provide detailed information about the requested food item. You MUST return ONLY a JSON object that strictly follows the provided schema. Do not include any other text, markdown blocks, or explanations.",
+            system: "You are a helpful food expert AI. Provide detailed information about the requested food item. You MUST return ONLY a JSON object that strictly follows the provided schema. Do not include any other text, markdown blocks, or explanations. All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., 'Rs. 250', 'Rs. 450').",
             prompt: `Return information for "${message}" strictly according to this JSON schema:
             {
                 "name": "string",
                 "description": "string or null",
-                "price": "string or null",
+                "price": "string or null - format as 'Rs. XXX' in Nepalese Rupees (NPR)",
                 "category": "string or null",
                 "ingredients": ["string"],
                 "allergens": ["string"],
                 "calories": "number or null",
+                "preparationTime": "number in minutes or null",
                 "origin": "string or null",
                 "isVegan": "boolean or null",
                 "isVegetarian": "boolean or null",

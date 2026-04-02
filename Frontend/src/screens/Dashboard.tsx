@@ -25,7 +25,8 @@ import { useDishes } from '@/hooks/useDishes';
 import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDishReviews } from '@/hooks/useDishReviews';
-import { getRecommendations, getPriceRange } from '../utils/recommendations';
+import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
+import { getRecommendations, getPriceRange, normalizePrice } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
 
 // Components
@@ -56,6 +57,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [phoneNumber, setPhoneNumber] = useState('');
     const [restaurantName, setRestaurantName] = useState('');
     const [restaurantLocation, setRestaurantLocation] = useState('');
+    const [detectingLocation, setDetectingLocation] = useState(false);
+    const [locationError, setLocationError] = useState('');
     const [foodProfile, setFoodProfile] = useState<FoodProfile>(DEFAULT_FOOD_PROFILE);
 
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -73,6 +76,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [currentDishFirestoreId, setCurrentDishFirestoreId] = useState<string | null>(null);
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
+
+    const dishIds = useMemo(() => allDishes.map(d => String(d.id)), [allDishes]);
+    const dishAverageRatings = useDishAverageRatings(dishIds);
 
     React.useEffect(() => {
         const fetchUserData = async () => {
@@ -323,6 +329,120 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             { enableHighAccuracy: true, timeout: 10000 }
         );
     }, [activeFilters.location, userLocation]);
+
+    const detectCurrentLocation = async () => {
+        if (!navigator.geolocation) {
+            setLocationError('Geolocation not supported in this browser');
+            setTimeout(() => setLocationError(''), 3000);
+            return;
+        }
+
+        setDetectingLocation(true);
+        setLocationError('');
+
+        const tryGeolocation = (highAccuracy: boolean) => {
+            return new Promise<GeolocationPosition>((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: highAccuracy,
+                    timeout: 15000,
+                    maximumAge: 60000
+                });
+            });
+        };
+
+        try {
+            let position: GeolocationPosition;
+            try {
+                position = await tryGeolocation(false);
+            } catch {
+                position = await tryGeolocation(true);
+            }
+
+            const { latitude, longitude } = position.coords;
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
+                { headers: { 'User-Agent': 'MenuVision/1.0' } }
+            );
+
+            if (!res.ok) throw new Error('Reverse geocoding failed');
+
+            const data = await res.json();
+            const addressParts = [];
+            if (data.address?.road) addressParts.push(data.address.road);
+            if (data.address?.neighbourhood) addressParts.push(data.address.neighbourhood);
+            if (data.address?.city || data.address?.town || data.address?.village) {
+                addressParts.push(data.address.city || data.address.town || data.address.village);
+            }
+            if (data.address?.country) addressParts.push(data.address.country);
+            
+            if (addressParts.length > 0) {
+                setRestaurantLocation(addressParts.join(', '));
+            } else {
+                setLocationError('Could not resolve address for your location');
+                setTimeout(() => setLocationError(''), 3000);
+            }
+        } catch (err: any) {
+            if (err?.code === 1) {
+                setLocationError('Location permission denied. Please allow location access in browser settings.');
+            } else if (err?.code === 2) {
+                setLocationError('Location unavailable. Please ensure location services are enabled.');
+            } else if (err?.code === 3) {
+                setLocationError('Location request timed out. Please try again.');
+            } else {
+                setLocationError('Could not detect location. Please enter manually.');
+            }
+            setTimeout(() => setLocationError(''), 5000);
+        } finally {
+            setDetectingLocation(false);
+        }
+    };
+
+        try {
+            let position: GeolocationPosition;
+            try {
+                position = await tryGeolocation(false);
+            } catch {
+                position = await tryGeolocation(true);
+            }
+
+            const { latitude, longitude } = position.coords;
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
+                { headers: { 'User-Agent': 'MenuVision/1.0' } }
+            );
+
+            if (!res.ok) throw new Error('Reverse geocoding failed');
+
+            const data = await res.json();
+            const addressParts = [];
+            if (data.address?.road) addressParts.push(data.address.road);
+            if (data.address?.neighbourhood) addressParts.push(data.address.neighbourhood);
+            if (data.address?.city || data.address?.town || data.address?.village) {
+                addressParts.push(data.address.city || data.address.town || data.address.village);
+            }
+            if (data.address?.country) addressParts.push(data.address.country);
+            
+            if (addressParts.length > 0) {
+                setRestaurantLocation(addressParts.join(', '));
+            } else {
+                setLocationError('Could not resolve address for your location');
+                setTimeout(() => setLocationError(''), 3000);
+            }
+        } catch (err: any) {
+            if (err?.code === 1) {
+                setLocationError('Location permission denied. Please allow location access in browser settings.');
+            } else if (err?.code === 2) {
+                setLocationError('Location unavailable. Please ensure location services are enabled.');
+            } else if (err?.code === 3) {
+                setLocationError('Location request timed out. Please try again.');
+            } else {
+                setLocationError('Could not detect location. Please enter manually.');
+            }
+            setTimeout(() => setLocationError(''), 5000);
+        } finally {
+            setDetectingLocation(false);
+        }
+    };
 
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         { id: 1, text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
@@ -830,6 +950,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             toggleRecommendedLike={toggleRecommendedLike}
                             onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)}
                             dishRatings={dishRatings}
+                            dishAverageRatings={dishAverageRatings}
                             activeFilters={activeFilters}
                             setActiveFilters={setActiveFilters}
                             locationLoading={locationLoading}
@@ -1300,12 +1421,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     onChange={(e) => setRestaurantName(e.target.value)}
                                     className="h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-2xl text-lg backdrop-blur-md"
                                 />
-                                <Input
-                                    placeholder="Location"
-                                    value={restaurantLocation}
-                                    onChange={(e) => setRestaurantLocation(e.target.value)}
-                                    className="h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-2xl text-lg backdrop-blur-md"
-                                />
+                                <div className="relative">
+                                    <Input
+                                        placeholder="Location"
+                                        value={restaurantLocation}
+                                        onChange={(e) => setRestaurantLocation(e.target.value)}
+                                        className="h-14 bg-white/10 border-white/20 text-white placeholder:text-white/50 rounded-2xl text-lg backdrop-blur-md pr-20"
+                                    />
+                                    <Button
+                                        type="button"
+                                        onClick={detectCurrentLocation}
+                                        disabled={detectingLocation}
+                                        className="absolute right-1 top-1/2 -translate-y-1/2 h-10 px-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white/80 rounded-xl text-xs font-medium disabled:opacity-50"
+                                    >
+                                        {detectingLocation ? 'Detecting...' : 'Detect'}
+                                    </Button>
+                                </div>
+                                {locationError && (
+                                    <p className="text-red-400 text-xs mt-1">{locationError}</p>
+                                )}
                             </div>
                             <Button onClick={analyzeMenu} disabled={analyzing} className="h-16 rounded-2xl bg-amber-400 text-black hover:bg-amber-500 text-lg font-black shadow-[0_10px_30px_rgba(251,191,36,0.3)] disabled:opacity-50 transition-all">
                                 {analyzing ? "Reading Menu..." : "Analyze This Menu"}

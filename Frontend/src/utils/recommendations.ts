@@ -37,6 +37,100 @@ function matchesFoodProfile(dish: Dish, foodProfile: FoodProfile): boolean {
     return true;
 }
 
+const EXCHANGE_RATES: Record<string, number> = {
+    '$': 133,
+    '€': 145,
+    '£': 170,
+    '¥': 0.89,
+    'A$': 87,
+    'C$': 98,
+    'S$': 100,
+    '฿': 3.9,
+    '₩': 0.095,
+    '₹': 1.6,
+};
+
+function detectCurrencySymbol(price: string): string {
+    const trimmed = price.trim();
+    if (/^£/.test(trimmed)) return '£';
+    if (/^€/.test(trimmed)) return '€';
+    if (/^¥/.test(trimmed)) return '¥';
+    if (/^A\$/.test(trimmed)) return 'A$';
+    if (/^C\$/.test(trimmed)) return 'C$';
+    if (/^S\$/.test(trimmed)) return 'S$';
+    if (/^฿/.test(trimmed)) return '฿';
+    if (/^₩/.test(trimmed)) return '₩';
+    if (/^₹/.test(trimmed)) return '₹';
+    if (/^\$/.test(trimmed)) return '$';
+    return '';
+}
+
+function extractNumericValue(price: string): number {
+    const match = price.replace(/[^0-9.]/g, '').match(/(\d+\.?\d*)/);
+    return match ? parseFloat(match[1]) : 0;
+}
+
+export function normalizePrice(price: string): string {
+    if (!price || price === 'Price not available' || price === 'N/A') return price;
+
+    const symbol = detectCurrencySymbol(price);
+    if (!symbol) return price;
+
+    const numericValue = extractNumericValue(price);
+    const rate = EXCHANGE_RATES[symbol];
+    if (!rate || numericValue === 0) return `Rs. ${numericValue}`;
+
+    const nprValue = Math.round(numericValue * rate);
+    return `Rs. ${nprValue}`;
+}
+
+const EXCHANGE_RATES: Record<string, number> = {
+    '$': 133,
+    '€': 145,
+    '£': 170,
+    '¥': 0.89,
+    'A$': 87,
+    'C$': 98,
+    'S$': 100,
+    '฿': 3.9,
+    '₩': 0.095,
+    '₹': 1.6,
+};
+
+function detectCurrencySymbol(price: string): string {
+    const trimmed = price.trim();
+    if (/^£/.test(trimmed)) return '£';
+    if (/^€/.test(trimmed)) return '€';
+    if (/^¥/.test(trimmed)) return '¥';
+    if (/^A\$/.test(trimmed)) return 'A$';
+    if (/^C\$/.test(trimmed)) return 'C$';
+    if (/^S\$/.test(trimmed)) return 'S$';
+    if (/^฿/.test(trimmed)) return '฿';
+    if (/^₩/.test(trimmed)) return '₩';
+    if (/^₹/.test(trimmed)) return '₹';
+    if (/^\$/.test(trimmed)) return '$';
+    return '';
+}
+
+function extractNumericValue(price: string): number {
+    const match = price.replace(/[^0-9.]/g, '').match(/(\d+\.?\d*)/);
+    return match ? parseFloat(match[1]) : 0;
+}
+
+export function normalizePrice(price: string): string {
+    if (!price || price === 'Price not available' || price === 'N/A') return price;
+
+    const symbol = detectCurrencySymbol(price);
+    if (!symbol) return price;
+
+    const numericValue = extractNumericValue(price);
+    const rate = EXCHANGE_RATES[symbol];
+    if (!rate || numericValue === 0) return `Rs. ${numericValue}`;
+
+    const nprValue = Math.round(numericValue * rate);
+    return `Rs. ${nprValue}`;
+}
+
 export function extractPriceValue(price: string): number {
     const match = price.match(/(\d+)/);
     return match ? parseInt(match[1], 10) : 0;

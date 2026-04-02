@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Dish, DishRating } from '@/types/dashboard';
 import MenuCard from './MenuCard';
 import { getSuggestions, getRecentSearches, addRecentSearch, clearRecentSearches } from '@/utils/search';
+import { normalizePrice } from '@/utils/recommendations';
+
+interface DishAverageRating {
+    dishId: string;
+    averageRating: number;
+    totalReviews: number;
+}
 
 interface HomeTabProps {
     searchText: string;
@@ -16,6 +23,7 @@ interface HomeTabProps {
     toggleRecommendedLike: (dish: Dish) => void;
     onSelectDish: (dish: Dish) => void;
     dishRatings?: Record<string, DishRating>;
+    dishAverageRatings?: Record<string, DishAverageRating>;
     activeFilters: {
         isVegetarian: boolean;
         isVegan: boolean;
@@ -59,6 +67,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     toggleRecommendedLike,
     onSelectDish,
     dishRatings = {},
+    dishAverageRatings = {},
     activeFilters,
     setActiveFilters,
     locationLoading = false,
@@ -205,7 +214,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                                                 <div className="font-medium text-gray-900 truncate">{dish.name}</div>
                                                 <div className="text-xs text-gray-500 truncate">{dish.place}{dish.cuisine ? ` · ${dish.cuisine}` : ''}</div>
                                             </div>
-                                            {dish.price && <span className="text-xs text-green-600 font-medium shrink-0">{dish.price}</span>}
+                                            {dish.price && <span className="text-xs text-green-600 font-medium shrink-0">{normalizePrice(dish.price)}</span>}
                                         </button>
                                     ))}
                                 </div>
@@ -478,6 +487,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         const isLiked = favoriteItems.some(fav => fav.id === dish.id);
                         const ratingKey = `dish_${dish.name}`;
                         const userRating = dishRatings[ratingKey]?.rating || 0;
+                        const avgRating = dishAverageRatings[String(dish.id)];
                         return (
                             <MenuCard
                                 key={dish.id}
@@ -486,6 +496,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
                                 isLiked={isLiked}
                                 onLike={() => toggleRecommendedLike(dish)}
                                 rating={userRating}
+                                averageRating={avgRating?.averageRating}
+                                totalReviews={avgRating?.totalReviews}
                             />
                         );
                     })}

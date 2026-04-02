@@ -4,6 +4,8 @@ import { ScannedItem } from '@/types/dashboard';
 import { Heart, MapPin, Star, Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
+import { normalizePrice } from '@/utils/recommendations';
+import { normalizePrice } from '@/utils/recommendations';
 
 interface MenuCardProps {
     item: ScannedItem;
@@ -11,17 +13,11 @@ interface MenuCardProps {
     isLiked?: boolean;
     onLike?: () => void;
     rating?: number;
+    averageRating?: number;
+    totalReviews?: number;
 }
 
-interface MenuCardProps {
-    item: ScannedItem;
-    onClick: () => void;
-    isLiked?: boolean;
-    onLike?: () => void;
-    rating?: number;
-}
-
-const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, rating = 0 }) => {
+const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, rating = 0, averageRating = 0, totalReviews = 0 }) => {
     return (
         <Card onClick={onClick} className="cursor-pointer bg-white hover:bg-amber-50/30 border border-gray-100 text-gray-900 transition-all overflow-hidden group relative shadow-sm hover:shadow-md hover:shadow-amber-100/50 transform hover:-translate-y-0.5 w-full rounded-xl">
             <div className="absolute inset-0 bg-gradient-to-r from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -44,9 +40,16 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                                     <MapPin size={10} /> {item.place}{item.location ? `, ${item.location}` : ''}
                                 </p>
                             )}
-                            {rating > 0 && (
-                                <div className="flex items-center gap-1 mt-1">
-                                    <StarRating rating={rating} readonly size={12} />
+                            {(rating > 0 || averageRating > 0) && (
+                                <div className="flex items-center gap-2 mt-1">
+                                    {averageRating > 0 ? (
+                                        <>
+                                            <StarRating rating={averageRating} readonly size={12} />
+                                            <span className="text-xs text-gray-500">{averageRating.toFixed(1)} ({totalReviews})</span>
+                                        </>
+                                    ) : (
+                                        <StarRating rating={rating} readonly size={12} />
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -71,7 +74,7 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
 
                 <div className="p-5 pt-0 sm:pt-5 sm:pl-2 min-w-[30%] flex flex-row sm:flex-col justify-between sm:justify-center items-center sm:items-end gap-3 border-t sm:border-t-0 sm:border-l border-gray-100 bg-gray-50/50 sm:bg-transparent">
                     <span className="text-amber-600 font-bold text-lg whitespace-nowrap bg-amber-50 px-3 py-1 rounded-full border border-amber-200 shadow-sm">
-                        {item.price}
+                        {normalizePrice(item.price)}
                     </span>
 
                     <div className="hidden sm:block">
