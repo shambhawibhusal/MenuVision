@@ -403,7 +403,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [chatInput, setChatInput] = useState('');
 
     const recommendedDishes = useMemo(() => {
-        return getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10, globallyLikedDishes, foodProfile);
+        console.log('Computing recommendations:', {
+            allDishesCount: allDishes.length,
+            favoriteItemsCount: favoriteItems.length,
+            unlikedDishIdsCount: unlikedDishIds.length,
+            globallyLikedDishesCount: globallyLikedDishes?.length,
+            foodProfile
+        });
+        const result = getRecommendations(allDishes, favoriteItems, unlikedDishIds, 10, globallyLikedDishes, foodProfile);
+        console.log('Recommendations result:', result.length, 'dishes');
+        return result;
     }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes, foodProfile]);
 
     const searchableDishes = useMemo(() => {

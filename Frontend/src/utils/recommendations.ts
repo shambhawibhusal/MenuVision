@@ -6,8 +6,10 @@ export interface RecommendationScore {
 }
 
 function matchesFoodProfile(dish: Dish, foodProfile: FoodProfile): boolean {
+    console.log('Checking dish:', dish.name, 'against foodProfile:', foodProfile);
     // Hard filter: if user is vegetarian, only recommend vegetarian dishes
     if (foodProfile.isVegetarian && !dish.isVegetarian) {
+        console.log('Dish filtered out: not vegetarian, user is vegetarian');
         return false;
     }
 
@@ -166,6 +168,13 @@ export function getRecommendations(
     globallyLikedDishes?: Dish[],
     foodProfile?: FoodProfile
 ): Dish[] {
+    console.log('getRecommendations called:', {
+        dishesCount: dishes.length,
+        likedDishesCount: likedDishes.length,
+        unlikedDishIdsCount: unlikedDishIds.length,
+        globallyLikedDishesCount: globallyLikedDishes?.length,
+        foodProfile
+    });
     const excludedIds = new Set([...unlikedDishIds]);
 
     const result: Dish[] = [];
