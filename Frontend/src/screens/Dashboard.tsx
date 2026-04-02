@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Star, Send } from "lucide-react";
+import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Send } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating } from '@/types/dashboard';
@@ -24,6 +24,7 @@ import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, 
 import { useDishes } from '@/hooks/useDishes';
 import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useDishReviews } from '@/hooks/useDishReviews';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
 
@@ -69,6 +70,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [dishRatings, setDishRatings] = useState<Record<string, DishRating>>({});
     const [feedbackComment, setFeedbackComment] = useState('');
     const [userRating, setUserRating] = useState(0);
+    const [currentDishFirestoreId, setCurrentDishFirestoreId] = useState<string | null>(null);
+
+    const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
 
     React.useEffect(() => {
         const fetchUserData = async () => {
@@ -204,41 +208,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
 
     const saveRating = async (dishName: string, rating: number, comment?: string) => {
-        if (!auth.currentUser || rating === 0) return;
+        if (!auth.currentUser || rating === 0 || !currentDishFirestoreId) return;
 
-        const userDocRef = doc(db, 'users', auth.currentUser.uid);
-        const ratingKey = `dish_${dishName}`;
+        const reviewRef = doc(db, 'dishes', currentDishFirestoreId, 'reviews', auth.currentUser.uid);
 
-        const newRating: DishRating = {
+        const reviewData: DishRating = {
             userId: auth.currentUser.uid,
+            userName: auth.currentUser.displayName || 'Anonymous',
             rating,
             comment: comment || '',
             createdAt: new Date().toISOString()
         };
 
         try {
-            const userDoc = await getDoc(userDocRef);
-            const existingRatings = userDoc.exists() ? (userDoc.data().dishRatings || {}) : {};
-            const updatedRatings = {
-                ...existingRatings,
-                [ratingKey]: newRating
-            };
+            await setDoc(reviewRef, reviewData);
 
-            setDishRatings(updatedRatings);
-            await updateDoc(userDocRef, {
-                dishRatings: updatedRatings
-            });
+            const ratingKey = `dish_${dishName}`;
+            setDishRatings(prev => ({
+                ...prev,
+                [ratingKey]: reviewData
+            }));
 
             setUserRating(0);
             setFeedbackComment('');
         } catch (error) {
-            console.error("Error saving rating:", error);
+            console.error("Error saving review:", error);
         }
-    };
-
-    const getDishRating = (dishName: string): DishRating | null => {
-        const ratingKey = `dish_${dishName}`;
-        return dishRatings[ratingKey] || null;
     };
 
     // -- Data States
@@ -246,6 +241,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [fullText, setFullText] = useState('');
     const [viewMode, setViewMode] = useState<'items' | 'text'>('items');
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
+
+    useEffect(() => {
+        if (!selectedDish) {
+            setCurrentDishFirestoreId(null);
+            return;
+        }
+        const existing = allDishes.find(
+            (d) => d.name.toLowerCase() === selectedDish.name.toLowerCase()
+        );
+        const dishId = 'id' in selectedDish ? (selectedDish as any).id : undefined;
+        const firestoreId = existing
+            ? String(existing.id)
+            : dishId
+                ? String(dishId)
+                : selectedDish.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        setCurrentDishFirestoreId(firestoreId);
+
+        const ratingKey = `dish_${selectedDish.name}`;
+        const existingRating = dishRatings[ratingKey];
+        setUserRating(existingRating?.rating || 0);
+        setFeedbackComment(existingRating?.comment || '');
+    }, [selectedDish, allDishes, dishRatings]);
+
     const [searchText, setSearchText] = useState('');
     const debouncedSearch = useDebounce(searchText, 250);
     const [sortBy, setSortBy] = useState<string>('relevance');
@@ -1132,68 +1150,89 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 </div>
 
                                 <Separator />
-                                <div className="space-y-3">
-                                    <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Rate this dish</Label>
-                                    {getDishRating(selectedDish?.name || '') ? (
-                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <StarRating
-                                                    rating={getDishRating(selectedDish?.name || '')?.rating || 0}
-                                                    readonly
-                                                    size={20}
-                                                />
-                                                <span className="text-sm font-medium text-green-700">You rated this!</span>
-                                            </div>
-                                            {getDishRating(selectedDish?.name || '')?.comment && (
-                                                <p className="text-sm text-gray-600 italic">"{getDishRating(selectedDish?.name || '')?.comment}"</p>
-                                            )}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Ratings & Reviews</Label>
+                                        {currentTotalReviews > 0 && (
+                                            <span className="text-xs text-gray-400">{currentTotalReviews} {currentTotalReviews === 1 ? 'review' : 'reviews'}</span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4">
+                                        <span className="text-4xl font-black text-amber-600">{currentAvgRating || '—'}</span>
+                                        <div>
+                                            <StarRating rating={currentAvgRating} readonly size={20} />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {currentTotalReviews > 0
+                                                    ? `Based on ${currentTotalReviews} ${currentTotalReviews === 1 ? 'review' : 'reviews'}`
+                                                    : 'No reviews yet'}
+                                            </p>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <div className="flex flex-col items-center gap-3 py-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Input
-                                                        type="number"
-                                                        min={1}
-                                                        max={5}
-                                                        step={0.5}
-                                                        value={userRating || ''}
-                                                        onChange={(e) => {
-                                                            const val = parseFloat(e.target.value);
-                                                            if (val >= 1 && val <= 5) {
-                                                                setUserRating(val);
-                                                            } else if (e.target.value === '') {
-                                                                setUserRating(0);
-                                                            }
-                                                        }}
-                                                        className="w-20 h-10 text-center font-bold"
-                                                        placeholder="1-5"
-                                                    />
-                                                    <span className="text-sm text-gray-500">rate 1-5</span>
-                                                </div>
-                                                <StarRating
-                                                    rating={userRating}
-                                                    onRatingChange={setUserRating}
-                                                    size={32}
-                                                />
+                                    </div>
+
+                                    {currentDishReviews.filter(r => r.userId === auth.currentUser?.uid).map((review) => (
+                                        <div key={review.id} className="bg-green-50 border border-green-200 rounded-xl p-4">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="text-sm font-semibold text-green-700">Your review</span>
+                                                <span className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
                                             </div>
-                                            {userRating > 0 && (
-                                                <div className="space-y-2">
-                                                    <Input
-                                                        placeholder="Add a comment (optional)"
-                                                        value={feedbackComment}
-                                                        onChange={(e) => setFeedbackComment(e.target.value)}
-                                                        className="h-12 rounded-xl"
-                                                    />
-                                                    <Button
-                                                        onClick={() => saveRating(selectedDish?.name || '', userRating, feedbackComment)}
-                                                        className="w-full h-10 rounded-xl bg-amber-400 text-black font-bold hover:bg-amber-500"
-                                                    >
-                                                        <Send size={16} className="mr-2" /> Submit Rating
-                                                    </Button>
-                                                </div>
+                                            <StarRating rating={review.rating} readonly size={16} />
+                                            {review.comment && (
+                                                <p className="text-sm text-gray-600 italic mt-2">"{review.comment}"</p>
                                             )}
-                                        </>
+                                            <p className="text-xs text-gray-400 mt-2">Edit your review below</p>
+                                        </div>
+                                    ))}
+
+                                    <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <StarRating
+                                                rating={userRating}
+                                                onRatingChange={setUserRating}
+                                                size={32}
+                                            />
+                                            <span className="text-sm text-gray-500">
+                                                {userRating > 0 ? `${userRating} star${userRating !== 1 ? 's' : ''}` : 'Tap to rate'}
+                                            </span>
+                                        </div>
+                                        {userRating > 0 && (
+                                            <div className="space-y-2">
+                                                <Input
+                                                    placeholder="Add a comment (optional)"
+                                                    value={feedbackComment}
+                                                    onChange={(e) => setFeedbackComment(e.target.value)}
+                                                    className="h-12 rounded-xl"
+                                                />
+                                                <Button
+                                                    onClick={() => saveRating(selectedDish?.name || '', userRating, feedbackComment)}
+                                                    className="w-full h-10 rounded-xl bg-amber-400 text-black font-bold hover:bg-amber-500"
+                                                >
+                                                    <Send size={16} className="mr-2" /> Submit Rating
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {currentDishReviews.filter(r => r.userId !== auth.currentUser?.uid).length > 0 && (
+                                        <div className="space-y-3">
+                                            <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">
+                                                All Reviews ({currentDishReviews.filter(r => r.userId !== auth.currentUser?.uid).length})
+                                            </Label>
+                                            {currentDishReviews
+                                                .filter(r => r.userId !== auth.currentUser?.uid)
+                                                .map((review) => (
+                                                    <div key={review.id} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-sm font-semibold text-gray-700">{review.userName}</span>
+                                                            <span className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
+                                                        </div>
+                                                        <StarRating rating={review.rating} readonly size={14} />
+                                                        {review.comment && (
+                                                            <p className="text-sm text-gray-600 mt-2">"{review.comment}"</p>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                        </div>
                                     )}
                                 </div>
                             </div>

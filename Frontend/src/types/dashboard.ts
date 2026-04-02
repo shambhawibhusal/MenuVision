@@ -18,6 +18,7 @@ export interface ScannedItem {
 
 export interface DishRating {
     userId: string;
+    userName?: string;
     rating: number;
     comment?: string;
     createdAt: string;
