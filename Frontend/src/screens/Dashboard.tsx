@@ -610,7 +610,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             const base64Image = await blobToBase64(imageBlob);
 
             // 2. Call Backend API
-            const response = await fetch('/api/analyzeMenu', {
+            const response = await fetch('https://menu-vision-rho.vercel.app/api/analyzeMenu', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -782,7 +782,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         setChatInput('');
 
         try {
-            const response = await fetch('/api/chat', {
+            const response = await fetch('https://menu-vision-rho.vercel.app/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ message: trimmed }),
