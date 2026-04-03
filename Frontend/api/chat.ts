@@ -1,7 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { generateText } from "ai";
 
-const model = google("gemini-2.5-flash-preview-0506");
+const model = google("gemini-2.0-flash");
 
 async function fetchPixabayImage(dishName: string): Promise<string | null> {
   const pixabayKey = process.env.PIXABAY_API_KEY;

@@ -2,7 +2,7 @@ import { google } from "@ai-sdk/google";
 import { generateObject, generateText } from "ai";
 import { z } from "zod";
 
-const model = google("gemini-2.5-flash-preview-0506");
+const model = google("gemini-2.0-flash");
 
 function parseBase64Image(input: string) {
   if (!input) throw new Error("No image provided");
