@@ -1,0 +1,10 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@ai-sdk/google": "^1.0.0",
+    "ai": "^4.0.0",
+    "zod": "^3.23.0"
+  }
+}
