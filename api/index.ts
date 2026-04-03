@@ -1,5 +1,5 @@
 import { google } from "@ai-sdk/google";
-import { generateObject } from "ai";
+import { generateObject, generateText } from "ai";
 import { z } from "zod";
 
 const model = google("gemini-2.5-flash-preview-0506");
@@ -49,6 +49,10 @@ interface AnalyzeMenuRequestBody {
   imageBase64?: string;
 }
 
+interface ChatRequestBody {
+  message: string;
+}
+
 async function fetchPixabayImage(dishName: string): Promise<string | null> {
   const pixabayKey = process.env.PIXABAY_API_KEY;
   if (!pixabayKey) return null;
@@ -58,7 +62,7 @@ async function fetchPixabayImage(dishName: string): Promise<string | null> {
       `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(dishName + " food")}&per_page=3&orientation=horizontal&image_type=photo`
     );
     if (pixabayRes.ok) {
-      const pixabayData = await pixabayRes.json() as { hits: Array<{ webformatURL: string; largeImageURL: string }> };
+      const pixabayData = await pixabayRes.json() as { hits: Array<{ webformatURL: string }> };
       return pixabayData.hits?.[0]?.webformatURL ?? null;
     }
   } catch (err) {
@@ -67,7 +71,38 @@ async function fetchPixabayImage(dishName: string): Promise<string | null> {
   return null;
 }
 
-export async function POST(request: Request) {
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function handler(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  if (path === "/analyzeMenu" || path === "/analyzeMenu/") {
+    const response = await handleAnalyzeMenu(request);
+    return new Response(response.body, {
+      ...response.init,
+      headers: { ...response.init.headers, ...corsHeaders },
+    });
+  } else if (path === "/chat" || path === "/chat/") {
+    const response = await handleChat(request);
+    return new Response(response.body, {
+      ...response.init,
+      headers: { ...response.init.headers, ...corsHeaders },
+    });
+  }
+
+  return Response.json({ error: "Not found" }, { status: 404 });
+}
+
+async function handleAnalyzeMenu(request: Request): Promise<Response> {
   try {
     const body: AnalyzeMenuRequestBody = await request.json();
     const imageInput = body.imageUrl || body.imageBase64;
@@ -83,24 +118,12 @@ export async function POST(request: Request) {
         {
           role: "user",
           content: [
-            { type: "text", text: "Extract every visible menu item with complete details. For each dish, provide realistic inferred ingredients, estimated calories, a mouth-watering description, and dietary information based on the dish name." },
+            { type: "text", text: "Extract every visible menu item with complete details." },
             { type: "image", image: `data:${mimeType};base64,${base64}` },
           ],
         },
       ],
-      system: `You are an expert menu scanner and culinary AI assistant. Your job is to:
-1. Extract all visible menu items from the image (name, price, category if visible)
-2. For each dish, INFER realistic data based on the dish name and cuisine type:
-    - ingredients: List 5-10 typical ingredients for this dish (be specific and realistic)
-    - calories: Estimate realistic calorie count in kcal (e.g., 450)
-    - preparationTime: Estimate realistic preparation time in minutes (e.g., 15, 20, 30)
-    - description: Write a brief, appetizing 1-2 sentence description of the dish
-    - allergens: List common allergens present (e.g., Dairy, Gluten, Nuts)
-    - origin: The cuisine origin (e.g., Italian, Japanese, Indian)
-    - isVegan/isVegetarian/isGlutenFree: Determine based on the dish
-    - price: If not visible in the image, estimate a realistic price in Nepalese Rupees (NPR). Format as "Rs. XXX" (e.g., "Rs. 250", "Rs. 450")
-
-NEVER return null or empty values for ingredients, calories, preparationTime, or description - always infer reasonable values based on the dish name. Be creative but realistic with your estimates.`,
+      system: `You are an expert menu scanner. Extract menu items and infer details.`,
     });
 
     const menuItemsWithImages = await Promise.all(
@@ -117,14 +140,33 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    const status = message.includes("429") ? 429 : message.includes("404") ? 404 : 500;
-
-    return Response.json(
-      {
-        success: false,
-        error: status === 429 ? "AI Quota reached. Please wait and try again." : message,
-      },
-      { status }
-    );
+    return Response.json({ success: false, error: message }, { status: 500 });
   }
 }
+
+async function handleChat(request: Request): Promise<Response> {
+  try {
+    const body: ChatRequestBody = await request.json();
+    const { message } = body;
+    if (!message) throw new Error("Message is required");
+
+    const { text } = await generateText({
+      model: model,
+      system: "You are a helpful food expert AI. Return ONLY JSON.",
+      prompt: `Return JSON for "${message}" with name, description, price, category, ingredients, allergens, calories, preparationTime, origin, isVegan, isVegetarian, isGlutenFree.`,
+    });
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonContent = jsonMatch ? jsonMatch[0] : text;
+    const object = JSON.parse(jsonContent);
+
+    const imageUrl = await fetchPixabayImage(object.name || message);
+
+    return Response.json({ success: true, imageUrl, data: object });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to get AI response";
+    return Response.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
+export { handler as POST, handler as GET };

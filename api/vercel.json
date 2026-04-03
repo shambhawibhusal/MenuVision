@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "installCommand": "npm install",
+  "build": {
+    "env": {
+      "NODE_VERSION": "20"
+    }
+  }
+}
