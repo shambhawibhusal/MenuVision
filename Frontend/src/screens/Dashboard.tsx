@@ -29,6 +29,7 @@ import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 import { getRecommendations, getPriceRange, normalizePrice } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
 import { formatPrepTime } from '../utils/formatters';
+import { checkDishInDataset, addDishToDataset, mergeWithDataset, incrementScanCount } from '../services/menuDataset';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -636,24 +637,74 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             console.log("Analysis Result:", data);
             console.log("Menu items with images:", data.menuItems?.map((item: any) => ({ name: item.name, imageUrl: item.imageUrl })));
 
-            const items: ScannedItem[] = (data.menuItems || []).map((item: any) => ({
-                name: item.name,
-                price: item.price || 'Price not available',
-                place: restaurantName || 'Scanned Menu',
-                location: restaurantLocation || '',
-                calories: item.calories ? `${item.calories} kcal` : undefined,
-                prepTime: item.prepTime || item.preparationTime || item.cookingTime,
-                ingredients: Array.isArray(item.ingredients) ? item.ingredients.join(', ') : item.ingredients,
-                description: item.description,
-                imageUrl: item.imageUrl,
-                allergens: item.allergens,
-                isVegan: item.isVegan,
-                isVegetarian: item.isVegetarian,
-                isGlutenFree: item.isGlutenFree,
-                origin: item.origin,
-                cuisine: item.origin,
-                category: item.category
-            }));
+            // Process items with dataset lookup
+            const processedItems: ScannedItem[] = [];
+            
+            for (const item of (data.menuItems || [])) {
+                console.log(`[Dataset] Processing dish: "${item.name}"`);
+                
+                // 1. Check dataset first
+                const datasetItem = await checkDishInDataset(item.name);
+                console.log(`[Dataset] Found in dataset: ${!!datasetItem}`, datasetItem ? `(ID: ${datasetItem.id}, scanCount: ${datasetItem.scanCount})` : '');
+                
+                // 2. Prepare extracted data
+                const extractedData = {
+                    name: item.name,
+                    price: item.price || 'Price not available',
+                    description: item.description,
+                    ingredients: Array.isArray(item.ingredients) ? item.ingredients.join(', ') : item.ingredients,
+                    calories: item.calories ? `${item.calories} kcal` : undefined,
+                    prepTime: item.prepTime || item.preparationTime || item.cookingTime,
+                    imageUrl: item.imageUrl,
+                    allergens: item.allergens,
+                    isVegan: item.isVegan,
+                    isVegetarian: item.isVegetarian,
+                    isGlutenFree: item.isGlutenFree,
+                    origin: item.origin,
+                    category: item.category
+                };
+                
+                // 3. Merge with dataset data or add to dataset
+                let finalData;
+                if (datasetItem) {
+                    console.log(`[Dataset] Using existing data from dataset for "${item.name}"`);
+                    // Increment scan count for existing dish
+                    if (datasetItem.id) {
+                        await incrementScanCount(datasetItem.id);
+                    }
+                    // Use dataset data
+                    finalData = mergeWithDataset(extractedData, datasetItem);
+                } else {
+                    console.log(`[Dataset] Adding new dish to dataset: "${item.name}"`);
+                    // Add to dataset for future use
+                    const newDishId = await addDishToDataset({
+                        name: item.name,
+                        description: item.description,
+                        ingredients: Array.isArray(item.ingredients) ? item.ingredients : item.ingredients ? [item.ingredients] : undefined,
+                        allergens: item.allergens,
+                        calories: item.calories ? `${item.calories} kcal` : undefined,
+                        prepTime: item.prepTime || item.preparationTime || item.cookingTime,
+                        imageUrl: item.imageUrl,
+                        isVegan: item.isVegan,
+                        isVegetarian: item.isVegetarian,
+                        isGlutenFree: item.isGlutenFree,
+                        origin: item.origin,
+                        category: item.category,
+                        scanCount: 1
+                    });
+                    console.log(`[Dataset] Added to dataset with ID: ${newDishId}`);
+                    // Use extracted data
+                    finalData = extractedData;
+                }
+                
+                processedItems.push({
+                    ...finalData,
+                    place: restaurantName || 'Scanned Menu',
+                    location: restaurantLocation || ''
+                });
+            }
+            
+            const items = processedItems;
             const extractedText = data.fullText || "";
 
             if (items.length > 0) {
