@@ -31,7 +31,7 @@ export default function App() {
             const userDoc = await getDoc(userDocRef);
             if (userDoc.exists()) {
                 const data = userDoc.data();
-                return !(data.foodProfile?.onboardingCompleted === true);
+                return data.foodProfile?.onboardingCompleted === undefined;
             }
             return true;
         } catch (error) {

@@ -37,6 +37,21 @@ function parseBase64Image(input: string): ParsedImage {
     return { mimeType, base64 };
 }
 
+function formatPrepTime(minutes: number | null): string | null {
+    if (minutes === null || minutes === undefined || minutes <= 0) {
+        return null;
+    }
+    if (minutes < 60) {
+        return `${minutes}min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins === 0) {
+        return `${hours}hour`;
+    }
+    return `${hours}hour ${mins}min`;
+}
+
 const FoodItemSchema = z.object({
     name: z.string(),
     description: z.string().nullable(),
@@ -99,7 +114,7 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
         const { object } = await generateObject({
             model: model,
             schema: MenuSchema,
-system: `You are an expert menu scanner and culinary AI assistant. Your job is to:
+            system: `You are an expert menu scanner and culinary AI assistant. Your job is to:
  1. Extract all visible menu items from the image (name, price, category if visible)
  2. For each dish, INFER realistic data based on the dish name and cuisine type:
     - ingredients: List 5-10 typical ingredients for this dish (be specific and realistic)
@@ -204,7 +219,10 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         res.json({
             success: true,
             imageUrl,
-            data: object
+            data: {
+                ...object,
+                preparationTime: formatPrepTime(object.preparationTime)
+            }
         });
 
     } catch (err: any) {

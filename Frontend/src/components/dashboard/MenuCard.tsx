@@ -5,6 +5,7 @@ import { Heart, MapPin, Star, Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
 import { normalizePrice } from '@/utils/recommendations';
+import { formatPrepTime } from '@/utils/formatters';
 
 interface MenuCardProps {
     item: ScannedItem;
@@ -100,7 +101,7 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                         )}
                         {item.prepTime && (
                             <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
-                                <Clock size={12} /> {item.prepTime}
+                                <Clock size={12} /> {formatPrepTime(item.prepTime)}
                             </span>
                         )}
                         {item.isVegan && (

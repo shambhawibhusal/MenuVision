@@ -28,6 +28,7 @@ import { useDishReviews } from '@/hooks/useDishReviews';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 import { getRecommendations, getPriceRange, normalizePrice } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
+import { formatPrepTime } from '../utils/formatters';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -1193,7 +1194,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     </div>
                                     <div>
                                         <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Prep Time</Label>
-                                        <p className="text-gray-900 font-bold mt-1 text-lg">{selectedDish?.prepTime || 'N/A'}</p>
+                                        <p className="text-gray-900 font-bold mt-1 text-lg">{formatPrepTime(selectedDish?.prepTime) || 'N/A'}</p>
                                     </div>
                                     <div>
                                         <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Origin</Label>
