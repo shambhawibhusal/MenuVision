@@ -16,6 +16,25 @@ export interface ScannedItem {
     category?: string;
 }
 
+export interface MenuDatasetItem {
+    id?: string;
+    name: string;
+    description?: string;
+    ingredients?: string[];
+    allergens?: string[];
+    calories?: string;
+    prepTime?: string;
+    imageUrl?: string | null;
+    isVegan?: boolean;
+    isVegetarian?: boolean;
+    isGlutenFree?: boolean;
+    origin?: string;
+    category?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
+    scanCount: number;
+}
+
 export interface DishRating {
     userId: string;
     userName?: string;
