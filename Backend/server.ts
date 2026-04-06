@@ -3,29 +3,17 @@ dotenv.config();
 
 import express, { Request, Response } from "express";
 import cors from "cors";
-import fs from "fs/promises";
-import path from "path";
-import os from "os";
 
 import { google } from "@ai-sdk/google";
-import { generateObject, streamText, generateText } from "ai";
+import { generateObject, generateText } from "ai";
 import { z } from "zod";
 
 import OpenAI from "openai";
-import admin from "firebase-admin";
+import { Jimp, JimpMime } from "jimp";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-const serviceAccount = require("./serviceAccountKey.json");
-if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    storageBucket: "menuvision-9acfc.appspot.com",
-  });
-}
-const bucket = admin.storage().bucket();
 
 const app = express();
 app.use(cors());
@@ -66,6 +54,17 @@ function formatPrepTime(minutes: number | null): string | null {
         return `${hours}hour`;
     }
     return `${hours}hour ${mins}min`;
+}
+
+async function compressBase64Image(base64Data: string): Promise<string> {
+    const { base64 } = parseBase64Image(base64Data);
+    const buffer = Buffer.from(base64, 'base64');
+    
+    const image = await Jimp.read(buffer);
+    image.resize({ w: 256, h: 256 });
+    
+    const outputBuffer = await image.getBuffer(JimpMime.jpeg);
+    return `data:image/jpeg;base64,${outputBuffer.toString('base64')}`;
 }
 
 const FoodItemSchema = z.object({
@@ -123,56 +122,13 @@ async function generateDishImage(dishName: string): Promise<string | null> {
         const dataUrl = `data:image/png;base64,${b64Image}`;
         console.log(`[GPT-Image] Created image for "${dishName}" (${b64Image.length} bytes)`);
         
-        const uploadUrl = await uploadImageToStorage(dataUrl, dishName);
-        return uploadUrl;
+        const compressedUrl = await compressBase64Image(dataUrl);
+        console.log(`[Jimp] Compressed image for "${dishName}" (${compressedUrl.length} bytes)`);
+        return compressedUrl;
     } catch (err: any) {
         console.error(`[GPT-Image] Error for "${dishName}":`, err?.message || err);
         return null;
     }
-}
-
-async function generateBatchImages(dishNames: string[]): Promise<Map<string, string>> {
-    const imageMap = new Map<string, string>();
-    
-    if (dishNames.length === 0) return imageMap;
-    
-    try {
-        console.log(`[GPT-Image] Batch generating ${dishNames.length} images`);
-        
-        const n = Math.min(dishNames.length, 10);
-        const firstDish = dishNames[0];
-        
-        const response = await openai.images.generate({
-            model: "gpt-image-1.5",
-            prompt: `A delicious, appetizing ${firstDish} dish, professional food photography, clean white or neutral background, restaurant quality, high resolution, realistic, appetizing, professionally lit`,
-            size: "1024x1024",
-            quality: "low",
-            n: n,
-        });
-
-        console.log(`[GPT-Image] Batch response received: ${response.data?.length || 0} images`);
-
-        if (!response.data || response.data.length === 0) {
-            console.warn(`[GPT-Image] No batch images generated`);
-            return imageMap;
-        }
-
-        for (let i = 0; i < response.data.length; i++) {
-            const dishName = dishNames[i] || dishNames[0];
-            const imageItem = response.data[i];
-            const b64Image = (imageItem as any).b64_json;
-            
-            if (b64Image) {
-                const dataUrl = `data:image/png;base64,${b64Image}`;
-                imageMap.set(dishName, dataUrl);
-                console.log(`[GPT-Image] Batch created for "${dishName}" (${b64Image.length} bytes)`);
-            }
-        }
-    } catch (err: any) {
-        console.error(`[GPT-Image] Batch error:`, err?.message || err);
-    }
-    
-    return imageMap;
 }
 
 app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, res: Response) => {
@@ -212,35 +168,36 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
 
         const dishNames = object.menuItems.map(item => item.name);
         
-        let imageMap: Map<string, string> = new Map();
-        try {
-            imageMap = await generateBatchImages(dishNames);
-        } catch (batchErr: any) {
-            console.warn(`[GPT-Image] Batch failed, using individual generation:`, batchErr?.message);
-        }
+        console.log(`[GPT-Image] Generating ${dishNames.length} images individually`);
         
-        const menuItemsWithImages = object.menuItems.map(item => ({
-            ...item,
-            imageUrl: imageMap.get(item.name) || null,
-        }));
-
+        const menuItemsWithImages = await Promise.all(
+            object.menuItems.map(async (item) => {
+                console.log(`[GPT-Image] Generating image for: "${item.name}"`);
+                const imageUrl = await generateDishImage(item.name);
+                return {
+                    ...item,
+                    imageUrl: imageUrl || null,
+                };
+            })
+        );
+        
         const missingImages = menuItemsWithImages.filter(item => !item.imageUrl);
         if (missingImages.length > 0) {
-            console.log(`[GPT-Image] Filling ${missingImages.length} missing images with individual calls`);
-            const filledItems = await Promise.all(
+            console.log(`[GPT-Image] Retrying ${missingImages.length} failed images`);
+            const retryItems = await Promise.all(
                 missingImages.map(async (item) => ({
                     ...item,
                     imageUrl: await generateDishImage(item.name),
                 }))
             );
-            menuItemsWithImages.forEach((item, idx) => {
+            menuItemsWithImages.forEach((item) => {
                 if (!item.imageUrl) {
-                    const filled = filledItems.find(f => f.name === item.name);
-                    if (filled) item.imageUrl = filled.imageUrl;
+                    const retry = retryItems.find(r => r.name === item.name);
+                    if (retry) item.imageUrl = retry.imageUrl;
                 }
             });
         }
-
+        
         res.json({
             success: true,
             fullText: object.fullText ?? "",

@@ -26,10 +26,10 @@ import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDishReviews } from '@/hooks/useDishReviews';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
-import { getRecommendations, getPriceRange, normalizePrice } from '../utils/recommendations';
+import { getRecommendations, getPriceRange } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
 import { formatPrepTime } from '../utils/formatters';
-import { checkDishInDataset, addDishToDataset, mergeWithDataset, incrementScanCount } from '../services/menuDataset';
+import { checkDishInDataset, addDishToDataset, incrementScanCount, getDishById, resolveScannedItems } from '../services/menuDataset';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -181,11 +181,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     });
                 }
             } else {
+                // Store minimal data: datasetId + name + price (reference-based)
                 const newDish: Dish = {
-                    ...item,
                     id: Date.now(),
+                    datasetId: item.datasetId,
+                    name: item.name,
+                    price: item.price || '',
                     place: item.place || 'Scanned Menu',
-                    price: item.price || ''
+                    location: item.location
                 };
                 const cleanedDish = Object.fromEntries(
                     Object.entries(newDish).filter(([, v]) => v !== undefined)
@@ -644,40 +647,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 console.log(`[Dataset] Processing dish: "${item.name}"`);
                 
                 // 1. Check dataset first
-                const datasetItem = await checkDishInDataset(item.name);
-                console.log(`[Dataset] Found in dataset: ${!!datasetItem}`, datasetItem ? `(ID: ${datasetItem.id}, scanCount: ${datasetItem.scanCount})` : '');
+                let datasetItem = await checkDishInDataset(item.name);
                 
-                // 2. Prepare extracted data
-                const extractedData = {
-                    name: item.name,
-                    price: item.price || 'Price not available',
-                    description: item.description,
-                    ingredients: Array.isArray(item.ingredients) ? item.ingredients.join(', ') : item.ingredients,
-                    calories: item.calories ? `${item.calories} kcal` : undefined,
-                    prepTime: item.prepTime || item.preparationTime || item.cookingTime,
-                    imageUrl: item.imageUrl,
-                    allergens: item.allergens,
-                    isVegan: item.isVegan,
-                    isVegetarian: item.isVegetarian,
-                    isGlutenFree: item.isGlutenFree,
-                    origin: item.origin,
-                    category: item.category
-                };
-                
-                // 3. Merge with dataset data or add to dataset
-                let finalData;
+                let datasetId: string;
                 if (datasetItem) {
-                    console.log(`[Dataset] Using existing data from dataset for "${item.name}"`);
-                    // Increment scan count for existing dish
-                    if (datasetItem.id) {
-                        await incrementScanCount(datasetItem.id);
-                    }
-                    // Use dataset data
-                    finalData = mergeWithDataset(extractedData, datasetItem);
+                    // Exists - use reference, increment count
+                    datasetId = datasetItem.id!;
+                    console.log(`[Dataset] Found in dataset: ${datasetId}, incrementing scanCount`);
+                    await incrementScanCount(datasetId);
                 } else {
+                    // New - add to dataset with image and all data
                     console.log(`[Dataset] Adding new dish to dataset: "${item.name}"`);
-                    // Add to dataset for future use
-                    const newDishId = await addDishToDataset({
+                    datasetId = await addDishToDataset({
                         name: item.name,
                         description: item.description,
                         ingredients: Array.isArray(item.ingredients) ? item.ingredients : item.ingredients ? [item.ingredients] : undefined,
@@ -689,16 +670,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         isVegetarian: item.isVegetarian,
                         isGlutenFree: item.isGlutenFree,
                         origin: item.origin,
-                        category: item.category,
-                        scanCount: 1
-                    });
-                    console.log(`[Dataset] Added to dataset with ID: ${newDishId}`);
-                    // Use extracted data
-                    finalData = extractedData;
+                        category: item.category
+                    }) || '';
+                    console.log(`[Dataset] Added to dataset with ID: ${datasetId}`);
                 }
                 
+                // 2. Store minimal data: datasetId + name + price (no image duplication)
                 processedItems.push({
-                    ...finalData,
+                    datasetId,
+                    name: item.name,
+                    price: item.price || 'Price not available',
                     place: restaurantName || 'Scanned Menu',
                     location: restaurantLocation || ''
                 });
@@ -840,6 +821,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 body: JSON.stringify({ message: trimmed }),
             });
             const data = await response.json();
+            
+            // Extract dish name from AI response
+            const dishName = data.data?.name || trimmed;
+            console.log(`[Chat] Processing dish: "${dishName}"`);
+            
+            let finalImageUrl: string | null = null;
+            
+            // Check dataset for the dish
+            let datasetItem = await checkDishInDataset(dishName);
+            
+            if (datasetItem) {
+                // Exists - use dataset, increment scan count
+                console.log(`[Chat] Found in dataset: ${datasetItem.id}`);
+                await incrementScanCount(datasetItem.id!);
+                finalImageUrl = datasetItem.imageUrl || null;
+            } else {
+                // New - add to dataset with GPT-generated image
+                console.log(`[Chat] Adding new dish to dataset: "${dishName}"`);
+                const newDishId = await addDishToDataset({
+                    name: dishName,
+                    description: data.data?.description,
+                    ingredients: Array.isArray(data.data?.ingredients) ? data.data.ingredients : data.data?.ingredients ? [data.data.ingredients] : undefined,
+                    allergens: data.data?.allergens,
+                    calories: data.data?.calories ? `${data.data.calories} kcal` : undefined,
+                    prepTime: data.data?.preparationTime,
+                    imageUrl: data.imageUrl || undefined,
+                    isVegan: data.data?.isVegan,
+                    isVegetarian: data.data?.isVegetarian,
+                    isGlutenFree: data.data?.isGlutenFree,
+                    origin: data.data?.origin,
+                    category: data.data?.category
+                });
+                console.log(`[Chat] Added to dataset with ID: ${newDishId}`);
+                
+                // Get the full data from dataset to get the properly stored image
+                if (newDishId) {
+                    const newDatasetItem = await getDishById(newDishId);
+                    finalImageUrl = newDatasetItem?.imageUrl || null;
+                }
+            }
+            
             const replyText = data.success && data.data
                 ? Object.entries(data.data)
                     .map(([k, v]) => `**${k}**: ${Array.isArray(v) ? (v as string[]).join(', ') : v ?? 'N/A'}`)
@@ -849,7 +871,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 id: Date.now() + 1,
                 text: replyText,
                 sender: 'bot',
-                imageUrl: data.imageUrl ?? null,
+                imageUrl: finalImageUrl,
             };
             setChatMessages(prev => [...prev, botMsg]);
         } catch {
@@ -1010,9 +1032,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             favoriteItems={favoriteItems}
                             toggleLike={toggleRecommendedLike}
                             onDeleteHistoryItem={deleteHistoryItem}
-                            onSelectHistoryItem={(item) => {
+                            onSelectHistoryItem={async (item) => {
                                 if (item.scannedItems && item.scannedItems.length > 0) {
-                                    setScannedItems(item.scannedItems);
+                                    const resolved = await resolveScannedItems(item.scannedItems);
+                                    setScannedItems(resolved);
                                     setActiveTab('results');
                                     setViewMode('items');
                                     setFullText("");

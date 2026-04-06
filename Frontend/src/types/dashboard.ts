@@ -1,4 +1,5 @@
 export interface ScannedItem {
+    datasetId?: string;
     name: string;
     price: string;
     place?: string;
@@ -19,6 +20,7 @@ export interface ScannedItem {
 export interface MenuDatasetItem {
     id?: string;
     name: string;
+    nameLower?: string;
     description?: string;
     ingredients?: string[];
     allergens?: string[];
@@ -45,6 +47,7 @@ export interface DishRating {
 
 export interface Dish extends ScannedItem {
     id: number;
+    datasetId?: string;
     place: string;
     cuisine?: string;
     tags?: string[];

@@ -9,11 +9,9 @@ import {
     setDoc,
     updateDoc,
     serverTimestamp,
-    increment,
-    QuerySnapshot,
-    DocumentData
+    increment
 } from 'firebase/firestore';
-import { MenuDatasetItem } from '@/types/dashboard';
+import { MenuDatasetItem, ScannedItem } from '@/types/dashboard';
 
 const DATASET_COLLECTION = 'menuDataset';
 
@@ -141,7 +139,7 @@ export const addDishToDataset = async (dish: Omit<MenuDatasetItem, 'id' | 'creat
         if (dish.imageUrl && !dish.imageUrl.startsWith('data:image')) {
             imageUrlToStore = dish.imageUrl;
         } else if (dish.imageUrl && dish.imageUrl.startsWith('data:image')) {
-            if (dish.imageUrl.length < 100000) {
+            if (dish.imageUrl.length < 200000) {  // ~200KB limit for 256x256 JPEG
                 imageUrlToStore = dish.imageUrl;
             } else {
                 console.log(`[Dataset Service] Skipping large image (${dish.imageUrl.length} bytes) for "${dish.name}"`);
@@ -227,6 +225,48 @@ export const getDishById = async (dishId: string): Promise<MenuDatasetItem | nul
         console.error('Error getting dish by ID:', error);
         return null;
     }
+};
+
+/**
+ * Resolve scanned item with full data from dataset
+ * Returns the scanned item merged with dataset data (or original if no datasetId)
+ */
+export const resolveScannedItem = async (scannedItem: ScannedItem): Promise<ScannedItem> => {
+    if (!scannedItem.datasetId) {
+        return scannedItem;
+    }
+
+    try {
+        const datasetItem = await getDishById(scannedItem.datasetId);
+        if (!datasetItem) {
+            return scannedItem;
+        }
+
+        return {
+            ...scannedItem,
+            description: datasetItem.description,
+            ingredients: datasetItem.ingredients,
+            calories: datasetItem.calories,
+            prepTime: datasetItem.prepTime,
+            imageUrl: datasetItem.imageUrl,
+            allergens: datasetItem.allergens,
+            isVegan: datasetItem.isVegan,
+            isVegetarian: datasetItem.isVegetarian,
+            isGlutenFree: datasetItem.isGlutenFree,
+            origin: datasetItem.origin,
+            category: datasetItem.category
+        };
+    } catch (error) {
+        console.error('Error resolving scanned item:', error);
+        return scannedItem;
+    }
+};
+
+/**
+ * Resolve multiple scanned items with dataset data
+ */
+export const resolveScannedItems = async (scannedItems: ScannedItem[]): Promise<ScannedItem[]> => {
+    return Promise.all(scannedItems.map(item => resolveScannedItem(item)));
 };
 
 /**

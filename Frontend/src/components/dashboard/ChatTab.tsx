@@ -48,12 +48,6 @@ const ChatTab: React.FC<ChatTabProps> = ({
                                         style={{ opacity: 1 }}
                                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                     />
-                                    <p className="text-[10px] text-gray-400 mt-1 text-right">
-                                        Photo via{' '}
-                                        <a href="https://pixabay.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
-                                            Pixabay
-                                        </a>
-                                    </p>
                                 </div>
                             )}
                             <div className="prose prose-sm max-w-none dark:prose-invert">

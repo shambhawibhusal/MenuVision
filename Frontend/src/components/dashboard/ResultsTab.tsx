@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScannedItem, Tab, Dish, DishRating } from '@/types/dashboard';
+import { resolveScannedItems } from '@/services/menuDataset';
 
 interface ResultsTabProps {
     viewMode: 'items' | 'text';
@@ -29,6 +30,16 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     onToggleLike,
     dishRatings = {}
 }) => {
+    const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
+
+    useEffect(() => {
+        const loadResolvedItems = async () => {
+            const resolved = await resolveScannedItems(scannedItems);
+            setResolvedItems(resolved);
+        };
+        loadResolvedItems();
+    }, [scannedItems]);
+
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
             <h2 className="text-3xl font-bold text-gray-900 mb-6">Analysis Results</h2>
@@ -39,8 +50,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                 </TabsList>
 <TabsContent value="items" className="mt-6">
                     <div className="flex flex-col gap-4 pb-20">
-                        {scannedItems.length === 0 && <p className="text-gray-500 text-center py-10 w-full">No items found.</p>}
-                        {scannedItems.map((item, index) => {
+                        {resolvedItems.length === 0 && <p className="text-gray-500 text-center py-10 w-full">No items found.</p>}
+                        {resolvedItems.map((item, index) => {
                             const isLiked = favoriteItems.some(fav => fav.name === item.name);
                             const ratingKey = `dish_${item.name}`;
                             const userRating = dishRatings[ratingKey]?.rating || 0;
