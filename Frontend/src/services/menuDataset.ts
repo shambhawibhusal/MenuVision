@@ -136,8 +136,21 @@ export const addDishToDataset = async (dish: Omit<MenuDatasetItem, 'id' | 'creat
 
         // Create new entry
         console.log(`[Dataset Service] Creating new dish: "${dish.name}"`);
+        
+        let imageUrlToStore: string | null = null;
+        if (dish.imageUrl && !dish.imageUrl.startsWith('data:image')) {
+            imageUrlToStore = dish.imageUrl;
+        } else if (dish.imageUrl && dish.imageUrl.startsWith('data:image')) {
+            if (dish.imageUrl.length < 100000) {
+                imageUrlToStore = dish.imageUrl;
+            } else {
+                console.log(`[Dataset Service] Skipping large image (${dish.imageUrl.length} bytes) for "${dish.name}"`);
+            }
+        }
+        
         const newDish: Omit<MenuDatasetItem, 'id'> = {
             ...dish,
+            imageUrl: imageUrlToStore,
             nameLower: dish.name.toLowerCase().trim(),
             scanCount: 1,
             createdAt: serverTimestamp() as any,

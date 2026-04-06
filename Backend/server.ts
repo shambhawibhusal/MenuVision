@@ -11,6 +11,22 @@ import { google } from "@ai-sdk/google";
 import { generateObject, streamText, generateText } from "ai";
 import { z } from "zod";
 
+import OpenAI from "openai";
+import admin from "firebase-admin";
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+const serviceAccount = require("./serviceAccountKey.json");
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    storageBucket: "menuvision-9acfc.appspot.com",
+  });
+}
+const bucket = admin.storage().bucket();
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
@@ -78,29 +94,85 @@ interface AnalyzeMenuRequestBody {
     imageBase64?: string;
 }
 
-async function fetchPixabayImage(dishName: string): Promise<string | null> {
-    const pixabayKey = process.env.PIXABAY_API_KEY;
-    console.log(`[Pixabay] Fetching image for: "${dishName}", Key exists: ${!!pixabayKey}`);
-    if (!pixabayKey) return null;
-
+async function generateDishImage(dishName: string): Promise<string | null> {
     try {
-        const pixabayRes = await fetch(
-            `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(dishName + " food")}&per_page=3&orientation=horizontal&image_type=photo`
-        );
-        console.log(`[Pixabay] Response status for "${dishName}": ${pixabayRes.status}`);
-        if (pixabayRes.ok) {
-            const pixabayData = await pixabayRes.json() as { hits: Array<{ webformatURL: string; largeImageURL: string }> };
-            const url = pixabayData.hits?.[0]?.webformatURL ?? null;
-            console.log(`[Pixabay] Image URL for "${dishName}": ${url}`);
-            return url;
-        } else {
-            const errorText = await pixabayRes.text();
-            console.warn(`[Pixabay] Error response: ${errorText}`);
+        console.log(`[GPT-Image] Generating image for: "${dishName}"`);
+
+        const response = await openai.images.generate({
+            model: "gpt-image-1.5",
+            prompt: `A delicious, appetizing ${dishName} dish, professional food photography, clean white or neutral background, restaurant quality, high resolution, realistic, appetizing, professionally lit`,
+            size: "1024x1024",
+            quality: "low",
+        });
+
+        console.log(`[GPT-Image] Response received for "${dishName}"`);
+
+        if (!response.data || response.data.length === 0) {
+            console.warn(`[GPT-Image] No image generated for "${dishName}"`);
+            return null;
         }
-    } catch (err) {
-        console.warn(`Pixabay fetch failed for "${dishName}":`, err);
+
+        const imageItem = response.data[0];
+        
+        const b64Image = (imageItem as any).b64_json;
+        if (!b64Image) {
+            console.warn(`[GPT-Image] No base64 data for "${dishName}"`);
+            return null;
+        }
+
+        const dataUrl = `data:image/png;base64,${b64Image}`;
+        console.log(`[GPT-Image] Created image for "${dishName}" (${b64Image.length} bytes)`);
+        
+        const uploadUrl = await uploadImageToStorage(dataUrl, dishName);
+        return uploadUrl;
+    } catch (err: any) {
+        console.error(`[GPT-Image] Error for "${dishName}":`, err?.message || err);
+        return null;
     }
-    return null;
+}
+
+async function generateBatchImages(dishNames: string[]): Promise<Map<string, string>> {
+    const imageMap = new Map<string, string>();
+    
+    if (dishNames.length === 0) return imageMap;
+    
+    try {
+        console.log(`[GPT-Image] Batch generating ${dishNames.length} images`);
+        
+        const n = Math.min(dishNames.length, 10);
+        const firstDish = dishNames[0];
+        
+        const response = await openai.images.generate({
+            model: "gpt-image-1.5",
+            prompt: `A delicious, appetizing ${firstDish} dish, professional food photography, clean white or neutral background, restaurant quality, high resolution, realistic, appetizing, professionally lit`,
+            size: "1024x1024",
+            quality: "low",
+            n: n,
+        });
+
+        console.log(`[GPT-Image] Batch response received: ${response.data?.length || 0} images`);
+
+        if (!response.data || response.data.length === 0) {
+            console.warn(`[GPT-Image] No batch images generated`);
+            return imageMap;
+        }
+
+        for (let i = 0; i < response.data.length; i++) {
+            const dishName = dishNames[i] || dishNames[0];
+            const imageItem = response.data[i];
+            const b64Image = (imageItem as any).b64_json;
+            
+            if (b64Image) {
+                const dataUrl = `data:image/png;base64,${b64Image}`;
+                imageMap.set(dishName, dataUrl);
+                console.log(`[GPT-Image] Batch created for "${dishName}" (${b64Image.length} bytes)`);
+            }
+        }
+    } catch (err: any) {
+        console.error(`[GPT-Image] Batch error:`, err?.message || err);
+    }
+    
+    return imageMap;
 }
 
 app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, res: Response) => {
@@ -138,12 +210,36 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
             ],
         });
 
-        const menuItemsWithImages = await Promise.all(
-            object.menuItems.map(async (item) => ({
-                ...item,
-                imageUrl: await fetchPixabayImage(item.name),
-            }))
-        );
+        const dishNames = object.menuItems.map(item => item.name);
+        
+        let imageMap: Map<string, string> = new Map();
+        try {
+            imageMap = await generateBatchImages(dishNames);
+        } catch (batchErr: any) {
+            console.warn(`[GPT-Image] Batch failed, using individual generation:`, batchErr?.message);
+        }
+        
+        const menuItemsWithImages = object.menuItems.map(item => ({
+            ...item,
+            imageUrl: imageMap.get(item.name) || null,
+        }));
+
+        const missingImages = menuItemsWithImages.filter(item => !item.imageUrl);
+        if (missingImages.length > 0) {
+            console.log(`[GPT-Image] Filling ${missingImages.length} missing images with individual calls`);
+            const filledItems = await Promise.all(
+                missingImages.map(async (item) => ({
+                    ...item,
+                    imageUrl: await generateDishImage(item.name),
+                }))
+            );
+            menuItemsWithImages.forEach((item, idx) => {
+                if (!item.imageUrl) {
+                    const filled = filledItems.find(f => f.name === item.name);
+                    if (filled) item.imageUrl = filled.imageUrl;
+                }
+            });
+        }
 
         res.json({
             success: true,
@@ -198,23 +294,10 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         const jsonContent = jsonMatch ? jsonMatch[0] : text;
         const object = JSON.parse(jsonContent);
 
-        // Fetch a dish image from Pixabay
-        let imageUrl: string | null = null;
-        try {
-            const dishName = object.name || message;
-            const pixabayKey = process.env.PIXABAY_API_KEY;
-            if (pixabayKey) {
-                const pixabayRes = await fetch(
-                    `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(dishName + " food")}&per_page=3&orientation=horizontal&image_type=photo`
-                );
-                if (pixabayRes.ok) {
-                    const pixabayData = await pixabayRes.json() as { hits: Array<{ webformatURL: string }> };
-                    imageUrl = pixabayData.hits?.[0]?.webformatURL ?? null;
-                }
-            }
-        } catch (imgErr) {
-            console.warn("Pixabay fetch failed (non-fatal):", imgErr);
-        }
+        const dishName = object.name || message;
+        console.log(`[Chat] Generating image for dish: "${dishName}"`);
+        const imageUrl = await generateDishImage(dishName);
+        console.log(`[Chat] Image URL result: ${imageUrl}`);
 
         res.json({
             success: true,
@@ -232,6 +315,19 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
 });
 
 const PORT = process.env.PORT || 5000;
+
+
+
+app.get("/test-image/:dish", async (req, res) => {
+    try {
+        const dishName = req.params.dish || "Pizza";
+        const imageUrl = await generateDishImage(dishName);
+        res.json({ success: true, dishName, imageUrl: imageUrl?.substring(0, 100) + "..." });
+    } catch (err: any) {
+        res.json({ success: false, error: err?.message || err });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`✅ Backend running on http://localhost:${PORT}`);
 });
