@@ -3,6 +3,7 @@ dotenv.config();
 
 import express, { Request, Response } from "express";
 import cors from "cors";
+import crypto from "crypto";
 
 import { google } from "@ai-sdk/google";
 import { generateObject, generateText } from "ai";
@@ -11,9 +12,18 @@ import { z } from "zod";
 import OpenAI from "openai";
 import { Jimp, JimpMime } from "jimp";
 
+import admin from "firebase-admin";
+import serviceAccount from "./serviceAccountKey.json";
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount as admin.ServiceAccount)
+});
+
+const firestore = admin.firestore();
 
 const app = express();
 app.use(cors());
@@ -27,7 +37,6 @@ interface ParsedImage {
 }
 
 function parseBase64Image(input: string): ParsedImage {
-    // Accept either data URL: "data:image/png;base64,...." OR raw base64
     if (!input) throw new Error("No image provided");
 
     const isDataUrl = input.startsWith("data:");
@@ -67,6 +76,135 @@ async function compressBase64Image(base64Data: string): Promise<string> {
     return `data:image/jpeg;base64,${outputBuffer.toString('base64')}`;
 }
 
+const normalizeDishName = (name: string): string => {
+    return name.toLowerCase().trim().replace(/\s+/g, ' ');
+};
+
+const generateHash = (input: string): string => {
+    return crypto.createHash('sha256').update(input).digest('hex');
+};
+
+async function checkDishImageInDataset(dishName: string): Promise<string | null> {
+    try {
+        const normalizedName = normalizeDishName(dishName);
+        console.log(`[Cache] Checking dataset for dish: "${normalizedName}"`);
+        
+        const snapshot = await firestore.collection('menuDataset')
+            .where('nameLower', '==', normalizedName)
+            .limit(1)
+            .get();
+        
+        if (!snapshot.empty) {
+            const data = snapshot.docs[0].data();
+            if (data.imageUrl) {
+                console.log(`[Cache] Found cached image for "${dishName}": ${data.imageUrl.substring(0, 50)}...`);
+                return data.imageUrl;
+            }
+            console.log(`[Cache] Dish "${dishName}" exists but no image`);
+        }
+        
+        console.log(`[Cache] No cached image for "${dishName}"`);
+        return null;
+    } catch (error) {
+        console.error(`[Cache] Error checking dish image:`, error);
+        return null;
+    }
+}
+
+async function updateDishInDataset(dishName: string, imageUrl: string): Promise<void> {
+    try {
+        const normalizedName = normalizeDishName(dishName);
+        
+        const snapshot = await firestore.collection('menuDataset')
+            .where('nameLower', '==', normalizedName)
+            .limit(1)
+            .get();
+        
+        if (!snapshot.empty) {
+            const docRef = snapshot.docs[0].ref;
+            await docRef.update({
+                imageUrl: imageUrl,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            console.log(`[Cache] Updated image for dish: "${dishName}"`);
+        }
+    } catch (error) {
+        console.error(`[Cache] Error updating dish:`, error);
+    }
+}
+
+async function checkMenuCache(imageHash: string): Promise<{ fullText: string; menuItems: any[] } | null> {
+    try {
+        console.log(`[Cache] Checking menu cache with hash: ${imageHash.substring(0, 16)}...`);
+        
+        const docRef = firestore.collection('menuCache').doc(imageHash);
+        const docSnap = await docRef.get();
+        
+        if (docSnap.exists) {
+            const data = docSnap.data();
+            console.log(`[Cache] Menu cache HIT`);
+            return {
+                fullText: data?.fullText || "",
+                menuItems: data?.menuItems || []
+            };
+        }
+        
+        console.log(`[Cache] Menu cache MISS`);
+        return null;
+    } catch (error) {
+        console.error(`[Cache] Error checking menu cache:`, error);
+        return null;
+    }
+}
+
+async function saveMenuCache(imageHash: string, data: { fullText: string; menuItems: any[] }): Promise<void> {
+    try {
+        await firestore.collection('menuCache').doc(imageHash).set({
+            ...data,
+            cachedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`[Cache] Saved menu to cache`);
+    } catch (error) {
+        console.error(`[Cache] Error saving menu cache:`, error);
+    }
+}
+
+async function checkChatCache(queryHash: string): Promise<{ data: any; imageUrl: string | null } | null> {
+    try {
+        console.log(`[Cache] Checking chat cache with hash: ${queryHash.substring(0, 16)}...`);
+        
+        const docRef = firestore.collection('chatCache').doc(queryHash);
+        const docSnap = await docRef.get();
+        
+        if (docSnap.exists) {
+            const data = docSnap.data();
+            console.log(`[Cache] Chat cache HIT`);
+            return {
+                data: data?.data || {},
+                imageUrl: data?.imageUrl || null
+            };
+        }
+        
+        console.log(`[Cache] Chat cache MISS`);
+        return null;
+    } catch (error) {
+        console.error(`[Cache] Error checking chat cache:`, error);
+        return null;
+    }
+}
+
+async function saveChatCache(queryHash: string, data: { data: any; imageUrl: string | null }): Promise<void> {
+    try {
+        await firestore.collection('chatCache').doc(queryHash).set({
+            ...data,
+            cachedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        console.log(`[Cache] Saved chat to cache`);
+    } catch (error) {
+        console.error(`[Cache] Error saving chat cache:`, error);
+    }
+}
+
 const FoodItemSchema = z.object({
     name: z.string(),
     description: z.string().nullable(),
@@ -94,6 +232,11 @@ interface AnalyzeMenuRequestBody {
 }
 
 async function generateDishImage(dishName: string): Promise<string | null> {
+    const cachedImage = await checkDishImageInDataset(dishName);
+    if (cachedImage) {
+        return cachedImage;
+    }
+    
     try {
         console.log(`[GPT-Image] Generating image for: "${dishName}"`);
 
@@ -124,6 +267,9 @@ async function generateDishImage(dishName: string): Promise<string | null> {
         
         const compressedUrl = await compressBase64Image(dataUrl);
         console.log(`[Jimp] Compressed image for "${dishName}" (${compressedUrl.length} bytes)`);
+        
+        await updateDishInDataset(dishName, compressedUrl);
+        
         return compressedUrl;
     } catch (err: any) {
         console.error(`[GPT-Image] Error for "${dishName}":`, err?.message || err);
@@ -137,6 +283,20 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
         if (!imageInput) {
             throw new Error("No image data provided");
         }
+
+        const imageHash = generateHash(imageInput.substring(0, 10000));
+        
+        const cachedMenu = await checkMenuCache(imageHash);
+        if (cachedMenu) {
+            console.log(`[Cache] Returning cached menu`);
+            return res.json({
+                success: true,
+                fullText: cachedMenu.fullText,
+                menuItems: cachedMenu.menuItems,
+                fromCache: true
+            });
+        }
+
         const { mimeType, base64 } = parseBase64Image(imageInput);
 
         const { object } = await generateObject({
@@ -145,14 +305,14 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
             system: `You are an expert menu scanner and culinary AI assistant. Your job is to:
  1. Extract all visible menu items from the image (name, price, category if visible)
  2. For each dish, INFER realistic data based on the dish name and cuisine type:
-    - ingredients: List 5-10 typical ingredients for this dish (be specific and realistic)
-    - calories: Estimate realistic calorie count in kcal (e.g., 450)
-    - preparationTime: Estimate realistic preparation time in minutes (e.g., 15, 20, 30)
-    - description: Write a brief, appetizing 1-2 sentence description of the dish
-    - allergens: List common allergens present (e.g., Dairy, Gluten, Nuts)
-    - origin: The cuisine origin (e.g., Italian, Japanese, Indian)
-    - isVegan/isVegetarian/isGlutenFree: Determine based on the dish
-    - price: If not visible in the image, estimate a realistic price in Nepalese Rupees (NPR). Format as "Rs. XXX" (e.g., "Rs. 250", "Rs. 450")
+     - ingredients: List 5-10 typical ingredients for this dish (be specific and realistic)
+     - calories: Estimate realistic calorie count in kcal (e.g., 450)
+     - preparationTime: Estimate realistic preparation time in minutes (e.g., 15, 20, 30)
+     - description: Write a brief, appetizing 1-2 sentence description of the dish
+     - allergens: List common allergens present (e.g., Dairy, Gluten, Nuts)
+     - origin: The cuisine origin (e.g., Italian, Japanese, Indian)
+     - isVegan/isVegetarian/isGlutenFree: Determine based on the dish
+     - price: If not visible in the image, estimate a realistic price in Nepalese Rupees (NPR). Format as "Rs. XXX" (e.g., "Rs. 250", "Rs. 450")
 
 NEVER return null or empty values for ingredients, calories, preparationTime, or description - always infer reasonable values based on the dish name. Be creative but realistic with your estimates.`,
             messages: [
@@ -172,7 +332,7 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
         
         const menuItemsWithImages = await Promise.all(
             object.menuItems.map(async (item) => {
-                console.log(`[GPT-Image] Generating image for: "${item.name}"`);
+                console.log(`[GPT-Image] Processing image for: "${item.name}"`);
                 const imageUrl = await generateDishImage(item.name);
                 return {
                     ...item,
@@ -197,11 +357,17 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
                 }
             });
         }
-        
+
+        await saveMenuCache(imageHash, {
+            fullText: object.fullText ?? "",
+            menuItems: menuItemsWithImages
+        });
+
         res.json({
             success: true,
             fullText: object.fullText ?? "",
             menuItems: menuItemsWithImages,
+            fromCache: false
         });
     } catch (err: any) {
         const message = err?.message || "Unknown error";
@@ -226,6 +392,19 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         const { message } = req.body;
         if (!message) throw new Error("Message is required");
 
+        const queryHash = generateHash(normalizeDishName(message));
+        
+        const cachedChat = await checkChatCache(queryHash);
+        if (cachedChat) {
+            console.log(`[Cache] Returning cached chat response`);
+            return res.json({
+                success: true,
+                imageUrl: cachedChat.imageUrl,
+                data: cachedChat.data,
+                fromCache: true
+            });
+        }
+
         const { text } = await generateText({
             model: model,
             system: "You are a helpful food expert AI. Provide detailed information about the requested food item. You MUST return ONLY a JSON object that strictly follows the provided schema. Do not include any other text, markdown blocks, or explanations. All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., 'Rs. 250', 'Rs. 450').",
@@ -246,23 +425,30 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
             }`,
         });
 
-        // Extract JSON from potential markdown blocks
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         const jsonContent = jsonMatch ? jsonMatch[0] : text;
         const object = JSON.parse(jsonContent);
 
         const dishName = object.name || message;
-        console.log(`[Chat] Generating image for dish: "${dishName}"`);
+        console.log(`[Chat] Processing image for dish: "${dishName}"`);
         const imageUrl = await generateDishImage(dishName);
         console.log(`[Chat] Image URL result: ${imageUrl}`);
+
+        const formattedData = {
+            ...object,
+            preparationTime: formatPrepTime(object.preparationTime)
+        };
+
+        await saveChatCache(queryHash, {
+            data: formattedData,
+            imageUrl
+        });
 
         res.json({
             success: true,
             imageUrl,
-            data: {
-                ...object,
-                preparationTime: formatPrepTime(object.preparationTime)
-            }
+            data: formattedData,
+            fromCache: false
         });
 
     } catch (err: any) {
