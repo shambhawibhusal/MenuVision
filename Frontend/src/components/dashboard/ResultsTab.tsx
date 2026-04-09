@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScannedItem, Tab, Dish, DishRating } from '@/types/dashboard';
 import { resolveScannedItems } from '@/services/menuDataset';
+import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 
 interface ResultsTabProps {
     viewMode: 'items' | 'text';
@@ -32,6 +33,9 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
 
+    const dishIds = resolvedItems.map(item => String(item.id)).filter(Boolean);
+    const dishAverageRatings = useDishAverageRatings(dishIds);
+
     useEffect(() => {
         const loadResolvedItems = async () => {
             const resolved = await resolveScannedItems(scannedItems);
@@ -55,6 +59,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                             const isLiked = favoriteItems.some(fav => fav.name === item.name);
                             const ratingKey = `dish_${item.name}`;
                             const userRating = dishRatings[ratingKey]?.rating || 0;
+                            const avgRating = dishAverageRatings[String(item.id)];
                             return (
                                 <MenuCard
                                     key={index}
@@ -63,6 +68,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                                     isLiked={isLiked}
                                     onLike={() => onToggleLike(item)}
                                     rating={userRating}
+                                    averageRating={avgRating?.averageRating}
+                                    totalReviews={avgRating?.totalReviews}
                                 />
                             );
                         })}

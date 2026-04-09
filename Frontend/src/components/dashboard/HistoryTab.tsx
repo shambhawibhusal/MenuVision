@@ -6,6 +6,7 @@ import { MapPin, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MenuCard from './MenuCard';
 import { resolveScannedItems } from '@/services/menuDataset';
+import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 
 interface HistoryTabProps {
     historyItems: HistoryItem[];
@@ -19,6 +20,9 @@ interface HistoryTabProps {
 
 const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite, dishRatings = {} }) => {
     const [resolvedFavorites, setResolvedFavorites] = useState<Dish[]>([]);
+
+    const dishIds = resolvedFavorites.map(dish => String(dish.id)).filter(Boolean);
+    const dishAverageRatings = useDishAverageRatings(dishIds);
 
     useEffect(() => {
         const loadResolvedFavorites = async () => {
@@ -90,6 +94,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                         resolvedFavorites.map(dish => {
                             const ratingKey = `dish_${dish.name}`;
                             const userRating = dishRatings[ratingKey]?.rating || 0;
+                            const avgRating = dishAverageRatings[String(dish.id)];
                             return (
                                 <MenuCard
                                     key={dish.id}
@@ -98,6 +103,8 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                                     isLiked={true}
                                     onLike={() => toggleLike(dish)}
                                     rating={userRating}
+                                    averageRating={avgRating?.averageRating}
+                                    totalReviews={avgRating?.totalReviews}
                                 />
                             );
                         })
