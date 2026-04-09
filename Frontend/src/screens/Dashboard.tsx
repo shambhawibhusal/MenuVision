@@ -76,6 +76,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [feedbackComment, setFeedbackComment] = useState('');
     const [userRating, setUserRating] = useState(0);
     const [currentDishFirestoreId, setCurrentDishFirestoreId] = useState<string | null>(null);
+    const [resolvedRecommendedDishes, setResolvedRecommendedDishes] = useState<Dish[]>([]);
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
 
@@ -420,6 +421,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return result;
     }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes, foodProfile]);
 
+    React.useEffect(() => {
+        const resolveDishes = async () => {
+            if (recommendedDishes.length > 0) {
+                const resolved = await resolveScannedItems(recommendedDishes as ScannedItem[]) as Dish[];
+                setResolvedRecommendedDishes(resolved);
+            } else {
+                setResolvedRecommendedDishes([]);
+            }
+        };
+        resolveDishes();
+    }, [recommendedDishes]);
+
     const searchableDishes = useMemo(() => {
         const seen = new Set<string>();
         const pool: Dish[] = [];
@@ -454,7 +467,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const filteredDishes = useMemo(() => {
         const baseList = debouncedSearch.trim()
             ? searchDishes(searchableDishes, debouncedSearch)
-            : recommendedDishes;
+            : (resolvedRecommendedDishes.length > 0 ? resolvedRecommendedDishes : recommendedDishes);
 
         let results = baseList;
 
