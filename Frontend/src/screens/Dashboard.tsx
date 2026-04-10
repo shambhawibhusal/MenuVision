@@ -77,6 +77,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [userRating, setUserRating] = useState(0);
     const [currentDishFirestoreId, setCurrentDishFirestoreId] = useState<string | null>(null);
     const [resolvedRecommendedDishes, setResolvedRecommendedDishes] = useState<Dish[]>([]);
+    const [resolvedSearchableDishes, setResolvedSearchableDishes] = useState<Dish[]>([]);
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
 
@@ -422,7 +423,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }, [allDishes, favoriteItems, unlikedDishIds, globallyLikedDishes, foodProfile]);
 
     React.useEffect(() => {
-        const resolveDishes = async () => {
+        const loadResolvedRecommendations = async () => {
             if (recommendedDishes.length > 0) {
                 const resolved = await resolveScannedItems(recommendedDishes as ScannedItem[]) as Dish[];
                 setResolvedRecommendedDishes(resolved);
@@ -430,7 +431,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 setResolvedRecommendedDishes([]);
             }
         };
-        resolveDishes();
+        loadResolvedRecommendations();
     }, [recommendedDishes]);
 
     const searchableDishes = useMemo(() => {
@@ -464,10 +465,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return pool;
     }, [allDishes, favoriteItems, historyItems]);
 
+    React.useEffect(() => {
+        const resolveSearchableDishes = async () => {
+            if (searchableDishes.length > 0) {
+                const resolved = await resolveScannedItems(searchableDishes as ScannedItem[]) as Dish[];
+                setResolvedSearchableDishes(resolved);
+            } else {
+                setResolvedSearchableDishes([]);
+            }
+        };
+        resolveSearchableDishes();
+    }, [allDishes, favoriteItems, historyItems]);
+
     const filteredDishes = useMemo(() => {
         const baseList = debouncedSearch.trim()
-            ? searchDishes(searchableDishes, debouncedSearch)
-            : (resolvedRecommendedDishes.length > 0 ? resolvedRecommendedDishes : recommendedDishes);
+            ? searchDishes(resolvedSearchableDishes, debouncedSearch)
+            : resolvedRecommendedDishes;
 
         let results = baseList;
 
@@ -564,7 +577,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
 
         return results;
-    }, [recommendedDishes, searchableDishes, debouncedSearch, activeFilters, dishRatings, sortBy]);
+    }, [resolvedRecommendedDishes, searchableDishes, debouncedSearch, activeFilters, dishRatings, sortBy]);
 
     // -- Camera Refs
     const videoRef = useRef<HTMLVideoElement>(null);

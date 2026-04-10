@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { Dish } from '@/types/dashboard';
+import { getPriceRange } from '@/utils/recommendations';
 
 export function useDishes() {
     const [dishes, setDishes] = useState<Dish[]>([]);
@@ -12,20 +13,22 @@ export function useDishes() {
         const fetchDishes = async () => {
             try {
                 setLoading(true);
-                const dishesCollection = collection(db, 'dishes');
+                const dishesCollection = collection(db, 'menuDataset');
                 const snapshot = await getDocs(dishesCollection);
                 
                 const fetchedDishes: Dish[] = snapshot.docs.map((doc, index) => {
                     const data = doc.data();
+                    const priceValue = data.price || 'Price not available';
                     return {
-                        id: data.id || parseInt(doc.id) || index + 1,
+                        id: parseInt(doc.id.replace(/\D/g, '')) || index + 1,
+                        datasetId: doc.id,
                         name: data.name || 'Unknown Dish',
-                        place: data.place || data.restaurant || 'Unknown Restaurant',
-                        price: data.price || 'Price not available',
+                        place: data.place || data.restaurant || 'MenuVision Dataset',
+                        price: priceValue,
+                        priceRange: data.priceRange || (priceValue.startsWith('Rs.') ? getPriceRange(priceValue) : 'moderate'),
                         category: data.category || 'mains',
                         cuisine: data.cuisine || 'International',
                         tags: data.tags || [],
-                        priceRange: data.priceRange || 'moderate',
                         calories: data.calories,
                         prepTime: data.prepTime,
                         description: data.description,
