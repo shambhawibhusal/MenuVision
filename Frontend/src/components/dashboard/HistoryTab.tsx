@@ -92,9 +92,9 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                         <div className="text-center py-20 text-gray-400">No favorite dishes yet.</div>
                     ) : (
                         resolvedFavorites.map(dish => {
-                            const ratingKey = `dish_${dish.name}`;
+                            const ratingKey = `dish_${dish.name.toLowerCase().trim()}`;
                             const userRating = dishRatings[ratingKey]?.rating || 0;
-                            const avgRating = dishAverageRatings[String(dish.id)];
+                            const avgRating = dishAverageRatings[dish.datasetId || String(dish.id)];
                             return (
                                 <MenuCard
                                     key={dish.id}

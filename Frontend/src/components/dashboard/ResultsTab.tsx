@@ -57,9 +57,9 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                         {resolvedItems.length === 0 && <p className="text-gray-500 text-center py-10 w-full">No items found.</p>}
                         {resolvedItems.map((item, index) => {
                             const isLiked = favoriteItems.some(fav => fav.name === item.name);
-                            const ratingKey = `dish_${item.name}`;
+                            const ratingKey = `dish_${item.name.toLowerCase().trim()}`;
                             const userRating = dishRatings[ratingKey]?.rating || 0;
-                            const avgRating = dishAverageRatings[String(item.id)];
+                            const avgRating = dishAverageRatings[item.datasetId || String(item.id)];
                             return (
                                 <MenuCard
                                     key={index}

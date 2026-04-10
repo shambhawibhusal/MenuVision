@@ -81,7 +81,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
 
-    const dishIds = useMemo(() => allDishes.map(d => String(d.id)), [allDishes]);
+    const dishIds = useMemo(() => allDishes.map(d => d.datasetId || String(d.id)), [allDishes]);
     const dishAverageRatings = useDishAverageRatings(dishIds);
 
     React.useEffect(() => {
@@ -236,11 +236,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         try {
             await setDoc(reviewRef, reviewData);
 
-            const ratingKey = `dish_${dishName}`;
-            setDishRatings(prev => ({
-                ...prev,
+            const ratingKey = `dish_${dishName.toLowerCase().trim()}`;
+            const newDishRatings = {
+                ...dishRatings,
                 [ratingKey]: reviewData
-            }));
+            };
+            
+            setDishRatings(newDishRatings);
+            
+            const userDocRef = doc(db, 'users', auth.currentUser.uid);
+            await updateDoc(userDocRef, { dishRatings: newDishRatings });
 
             setUserRating(0);
             setFeedbackComment('');
@@ -495,28 +500,30 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         
         const cuisineValue = dish.cuisine || dish.origin;
         const matchesCuisine = activeFilters.cuisine.length === 0 || 
-            (cuisineValue && activeFilters.cuisine.some(c => cuisineValue.toLowerCase().includes(c.toLowerCase())));
+            (cuisineValue && activeFilters.cuisine.some(c => {
+                const cv = cuisineValue.toLowerCase();
+                if (c.toLowerCase() === 'nepali') {
+                    return cv.includes('nepal') || cv.includes('nepali') || cv.includes('newari') || cv.includes('thakali');
+                }
+                return cv.includes(c.toLowerCase());
+            }));
         
         const matchesPrepTime = activeFilters.prepTime.length === 0 || 
-            (dish.prepTime && activeFilters.prepTime.some(pt => {
-                const prepMins = parseInt(dish.prepTime?.replace(/\D/g, '') || '0');
-                if (pt === 'under15') return prepMins < 15;
-                if (pt === 'under30') return prepMins < 30;
+            (!dish.prepTime ? false : activeFilters.prepTime.some(pt => {
+                const prepStr = String(dish.prepTime || '');
+                const prepMins = parseInt(prepStr.split('-')[0].replace(/\D/g, '') || '0');
+                if (pt === 'under15') return prepMins > 0 && prepMins < 15;
+                if (pt === 'under30') return prepMins > 0 && prepMins < 30;
                 return true;
             }));
 
         let matchesLocation = true;
+        const KATHMANDU_CENTER = { lat: 27.7172, lng: 85.3240 };
+        
         if (activeFilters.location === 'kathmandu') {
-            matchesLocation = !!dish.location && dish.location.toLowerCase().includes('kathmandu');
+            const loc = (dish.location || '').toLowerCase();
+            matchesLocation = !!dish.location && (loc.includes('kathmandu') || loc.includes('ktm'));
         } else if (activeFilters.location === 'nearby') {
-            if (userLocation?.city) {
-                const loc = (dish.location || '').toLowerCase();
-                const city = userLocation.city.toLowerCase();
-                matchesLocation = loc.includes(city);
-            } else {
-                matchesLocation = !locationLoading;
-            }
-        } else if (activeFilters.location === 'within2km') {
             if (dish.latitude != null && dish.longitude != null && userLocation) {
                 const R = 6371;
                 const dLat = (dish.latitude - userLocation.lat) * Math.PI / 180;
@@ -533,17 +540,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             } else {
                 matchesLocation = !locationLoading;
             }
+        } else if (activeFilters.location === 'within2km') {
+            if (dish.latitude != null && dish.longitude != null) {
+                const R = 6371;
+                const dLat = (dish.latitude - KATHMANDU_CENTER.lat) * Math.PI / 180;
+                const dLng = (dish.longitude - KATHMANDU_CENTER.lng) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) ** 2 +
+                    Math.cos(KATHMANDU_CENTER.lat * Math.PI / 180) * Math.cos(dish.latitude * Math.PI / 180) *
+                    Math.sin(dLng / 2) ** 2;
+                const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                matchesLocation = dist <= 2;
+            } else {
+                const loc = (dish.location || '').toLowerCase();
+                matchesLocation = loc.includes('kathmandu') || loc.includes('ktm');
+            }
         }
 
         let matchesRating = true;
         if (activeFilters.rating) {
-            const ratingKey = `dish_${dish.name}`;
-            const dishRating = dishRatings[ratingKey]?.rating || 0;
+            const normalizedName = dish.name.toLowerCase().trim();
+            const ratingKey = `dish_${normalizedName}`;
+            
+            const localRating = dishRatings[ratingKey];
+            const ratingKey2 = dish.datasetId || String(dish.id);
+            const fetchedData = dishAverageRatings?.[ratingKey2];
+            const avgRating = localRating?.rating || fetchedData?.averageRating || 0;
+            
             if (activeFilters.rating === 'rated') {
-                matchesRating = dishRating > 0;
+                const hasRating = !!localRating || (fetchedData?.totalReviews || 0) > 0 || avgRating > 0;
+                matchesRating = hasRating;
             } else {
                 const minRating = parseFloat(activeFilters.rating);
-                matchesRating = dishRating >= minRating;
+                matchesRating = avgRating >= minRating;
             }
         }
 
@@ -563,21 +591,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 return priceB - priceA;
             });
         } else if (sortBy === 'rating') {
-            results.sort((a, b) => {
-                const ratingA = dishRatings[`dish_${a.name}`]?.rating || 0;
-                const ratingB = dishRatings[`dish_${b.name}`]?.rating || 0;
+            console.log('Rating sort - results count:', results.length);
+            results = results.map(d => {
+                const fetched = dishAverageRatings?.[String(d.id)];
+                const allDish = allDishes.find(x => x.name === d.name);
+                const rating = fetched?.averageRating || d.averageRating || allDish?.averageRating || 0;
+                console.log('Dish:', d.name, 'rating:', rating, 'fetched:', fetched, 'allDish:', allDish?.averageRating);
+                return { ...d, _sortRating: rating };
+            }).sort((a, b) => {
+                const ratingA = (a as any)._sortRating;
+                const ratingB = (b as any)._sortRating;
                 return ratingB - ratingA;
+            });
+            console.log('Rating sort - top 3:', results.slice(0, 3).map(d => ({ name: d.name, rating: (d as any)._sortRating })));
+            results = results.map(d => {
+                const { _sortRating, ...rest } = d as any;
+                return rest as typeof d;
             });
         } else if (sortBy === 'prep-time') {
             results.sort((a, b) => {
-                const timeA = parseInt(a.prepTime?.replace(/\D/g, '') || '999');
-                const timeB = parseInt(b.prepTime?.replace(/\D/g, '') || '999');
+                const parseTime = (t: string | number | undefined) => {
+                    if (!t) return Infinity;
+                    const str = String(t);
+                    return parseInt(str.split('-')[0].replace(/\D/g, '') || '999');
+                };
+                const timeA = parseTime(a.prepTime);
+                const timeB = parseTime(b.prepTime);
                 return timeA - timeB;
             });
         }
 
         return results;
-    }, [resolvedRecommendedDishes, searchableDishes, debouncedSearch, activeFilters, dishRatings, sortBy]);
+    }, [resolvedRecommendedDishes, searchableDishes, debouncedSearch, activeFilters, dishAverageRatings, dishRatings, allDishes, sortBy]);
 
     // -- Camera Refs
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -1016,7 +1061,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             activeFilters={activeFilters}
                             setActiveFilters={setActiveFilters}
                             locationLoading={locationLoading}
-                            allDishes={searchableDishes}
+                            allDishes={resolvedSearchableDishes}
                             sortBy={sortBy}
                             setSortBy={setSortBy}
                         />

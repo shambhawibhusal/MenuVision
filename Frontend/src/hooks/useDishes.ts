@@ -27,7 +27,7 @@ export function useDishes() {
                         price: priceValue,
                         priceRange: data.priceRange || (priceValue.startsWith('Rs.') ? getPriceRange(priceValue) : 'moderate'),
                         category: data.category || 'mains',
-                        cuisine: data.cuisine || 'International',
+                        cuisine: data.cuisine || data.origin || 'International',
                         tags: data.tags || [],
                         calories: data.calories,
                         prepTime: data.prepTime,
@@ -39,7 +39,9 @@ export function useDishes() {
                         isVegetarian: data.isVegetarian,
                         isGlutenFree: data.isGlutenFree,
                         origin: data.origin,
-                        location: data.location
+                        location: data.location,
+                        latitude: data.latitude,
+                        longitude: data.longitude
                     };
                 });
                 

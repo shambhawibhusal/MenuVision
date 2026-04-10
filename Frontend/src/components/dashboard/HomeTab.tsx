@@ -372,7 +372,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
                             <div className="space-y-2">
                                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Cuisine</span>
-                                {['Nepali', 'Indian', 'Chinese'].map(cuisine => (
+                                {['Nepali', 'Indian', 'Chinese', 'Other'].map(cuisine => (
                                     <label key={cuisine} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
                                         <input
                                             type="checkbox"
@@ -485,9 +485,9 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 <div className="flex flex-col gap-4">
                     {filteredDishes.map(dish => {
                         const isLiked = favoriteItems.some(fav => fav.id === dish.id);
-                        const ratingKey = `dish_${dish.name}`;
+                        const ratingKey = `dish_${dish.name.toLowerCase().trim()}`;
                         const userRating = dishRatings[ratingKey]?.rating || 0;
-                        const avgRating = dishAverageRatings[String(dish.id)];
+                        const avgRating = dishAverageRatings[dish.datasetId || String(dish.id)];
                         return (
                             <MenuCard
                                 key={dish.id}

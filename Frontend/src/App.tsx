@@ -7,6 +7,7 @@ import Dashboard from './screens/Dashboard';
 import OnboardingScreen from './screens/OnboardingScreen';
 import { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 type Screen = 'splash' | 'login' | 'signup' | 'onboarding' | 'dashboard';
 
@@ -103,10 +104,12 @@ export default function App() {
                 />
             )}
             {currentScreen === 'dashboard' && user && !pendingOnboardingUser && (
-                <Dashboard onLogout={() => {
-                    auth.signOut();
-                    updateScreen('splash');
-                }} />
+                <ErrorBoundary>
+                    <Dashboard onLogout={() => {
+                        auth.signOut();
+                        updateScreen('splash');
+                    }} />
+                </ErrorBoundary>
             )}
         </>
     );
