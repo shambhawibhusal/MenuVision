@@ -24,5 +24,8 @@ export default defineConfig({
       },
     },
   },
+  optimizeDeps: {
+    include: ['@react-google-maps/api'],
+  },
 })
 

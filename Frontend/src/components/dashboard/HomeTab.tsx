@@ -48,6 +48,7 @@ interface HomeTabProps {
     allDishes: Dish[];
     sortBy: string;
     setSortBy: (val: string) => void;
+    onLocationClick?: (dish: Dish) => void;
 }
 
 const SORT_OPTIONS = [
@@ -495,6 +496,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                                 onClick={() => onSelectDish(dish)}
                                 isLiked={isLiked}
                                 onLike={() => toggleRecommendedLike(dish)}
+                                onLocationClick={() => onLocationClick?.(dish)}
                                 rating={userRating}
                                 averageRating={avgRating?.averageRating}
                                 totalReviews={avgRating?.totalReviews}

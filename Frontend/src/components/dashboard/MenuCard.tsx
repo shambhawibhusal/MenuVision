@@ -12,12 +12,13 @@ interface MenuCardProps {
     onClick: () => void;
     isLiked?: boolean;
     onLike?: () => void;
+    onLocationClick?: () => void;
     rating?: number;
     averageRating?: number;
     totalReviews?: number;
 }
 
-const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, rating = 0, averageRating = 0, totalReviews = 0 }) => {
+const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, onLocationClick, rating = 0, averageRating = 0, totalReviews = 0 }) => {
     return (
         <Card onClick={onClick} className="cursor-pointer bg-white hover:bg-amber-50/30 border border-gray-100 text-gray-900 transition-all overflow-hidden group relative shadow-sm hover:shadow-md hover:shadow-amber-100/50 transform hover:-translate-y-0.5 w-full rounded-xl">
             <div className="absolute inset-0 bg-gradient-to-r from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -36,9 +37,22 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                                 {item.name}
                             </CardTitle>
 {item.place && (
-                                <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                <button
+                                    className="text-xs text-gray-500 flex items-center gap-1 mt-0.5 hover:text-amber-600 transition-colors disabled:opacity-50"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        console.log('[MenuCard] Clicked map - lat:', item.latitude, 'lng:', item.longitude, 'onLocationClick exists:', !!onLocationClick);
+                                        if (item.latitude && item.longitude && onLocationClick) {
+                                            onLocationClick();
+                                        }
+                                    }}
+                                    disabled={!item.latitude || !item.longitude}
+                                >
                                     <MapPin size={10} /> {item.place}{item.location ? `, ${item.location}` : ''}
-                                </p>
+                                    {item.latitude && item.longitude && (
+                                        <span className="ml-1 text-amber-500">(Map)</span>
+                                    )}
+                                </button>
                             )}
                             {(rating > 0 || averageRating > 0) && (
                                 <div className="flex items-center gap-2 mt-1">

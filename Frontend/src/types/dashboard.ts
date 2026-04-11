@@ -15,6 +15,8 @@ export interface ScannedItem {
     prepTime?: string;
     origin?: string;
     category?: string;
+    latitude?: number;
+    longitude?: number;
 }
 
 export interface MenuDatasetItem {
@@ -32,6 +34,8 @@ export interface MenuDatasetItem {
     isGlutenFree?: boolean;
     origin?: string;
     category?: string;
+    latitude?: number;
+    longitude?: number;
     createdAt?: Date;
     updatedAt?: Date;
     scanCount: number;

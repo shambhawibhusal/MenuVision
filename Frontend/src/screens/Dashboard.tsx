@@ -39,6 +39,7 @@ import ProfileTab from '@/components/dashboard/ProfileTab';
 import HistoryTab from '@/components/dashboard/HistoryTab';
 import NavIcon from '@/components/dashboard/NavIcon';
 import StarRating from '@/components/ui/StarRating';
+import { LocationMap } from '@/components/dashboard/LocationMap';
 
 interface DashboardProps {
     onLogout: () => void;
@@ -78,6 +79,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [currentDishFirestoreId, setCurrentDishFirestoreId] = useState<string | null>(null);
     const [resolvedRecommendedDishes, setResolvedRecommendedDishes] = useState<Dish[]>([]);
     const [resolvedSearchableDishes, setResolvedSearchableDishes] = useState<Dish[]>([]);
+    const [selectedLocationDish, setSelectedLocationDish] = useState<Dish | null>(null);
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
 
@@ -371,6 +373,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             }
 
             const { latitude, longitude } = position.coords;
+            
+            // Save coordinates to state for use when saving scanned items
+            setUserLocation({ lat: latitude, lng: longitude, city: '' });
+            
             const res = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
                 { headers: { 'User-Agent': 'MenuVision/1.0' } }
@@ -741,7 +747,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         isVegetarian: item.isVegetarian,
                         isGlutenFree: item.isGlutenFree,
                         origin: item.origin,
-                        category: item.category
+                        category: item.category,
+                        latitude: userLocation?.lat,
+                        longitude: userLocation?.lng
                     }) || '';
                     console.log(`[Dataset] Added to dataset with ID: ${datasetId}`);
                 }
@@ -752,7 +760,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     name: item.name,
                     price: item.price || 'Price not available',
                     place: restaurantName || 'Scanned Menu',
-                    location: restaurantLocation || ''
+                    location: restaurantLocation || '',
+                    latitude: userLocation?.lat,
+                    longitude: userLocation?.lng
                 });
             }
             
@@ -1064,6 +1074,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             allDishes={resolvedSearchableDishes}
                             sortBy={sortBy}
                             setSortBy={setSortBy}
+                            onLocationClick={(dish) => setSelectedLocationDish(dish as Dish)}
                         />
                     )}
                     {activeTab === 'results' && (
@@ -1321,9 +1332,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             </div>
                             <div className="text-green-600 text-xl font-bold mb-2">{selectedDish?.price}</div>
                             {selectedDish?.place && (
-                                <p className="text-sm text-gray-500 flex items-center gap-1 mb-6">
+                                <button
+                                    className="text-sm text-gray-500 flex items-center gap-1 mb-6 hover:text-amber-600 transition-colors"
+                                    onClick={() => setSelectedLocationDish(selectedDish)}
+                                    disabled={!selectedDish?.latitude || !selectedDish?.longitude}
+                                >
                                     <MapPin size={14} /> {selectedDish.place}{selectedDish.location ? `, ${selectedDish.location}` : ''}
-                                </p>
+                                    {selectedDish?.latitude && selectedDish?.longitude && (
+                                        <span className="ml-1 text-xs text-amber-500">(View Map)</span>
+                                    )}
+                                </button>
                             )}
 
                             <div className="space-y-6">
@@ -1511,6 +1529,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 </div>
                             </div>
                         </div>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={!!selectedLocationDish} onOpenChange={(open) => !open && setSelectedLocationDish(null)}>
+                    <DialogContent className="sm:max-w-lg rounded-3xl p-4 border-none">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <MapPin className="w-5 h-5" />
+                                {selectedLocationDish?.place || 'Restaurant Location'}
+                            </DialogTitle>
+                            <DialogDescription>
+                                Location for {selectedLocationDish?.name}
+                            </DialogDescription>
+                        </DialogHeader>
+                        {selectedLocationDish?.latitude != null && selectedLocationDish?.longitude != null ? (
+                            <LocationMap
+                                latitude={selectedLocationDish.latitude}
+                                longitude={selectedLocationDish.longitude}
+                                placeName={selectedLocationDish.place}
+                            />
+                        ) : (
+                            <div className="w-full h-[300px] rounded-xl bg-gray-100 flex items-center justify-center">
+                                <p className="text-gray-500">No location data available</p>
+                            </div>
+                        )}
+                        <DialogFooter>
+                            <Button onClick={() => setSelectedLocationDish(null)} className="w-full">
+                                Close
+                            </Button>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
 

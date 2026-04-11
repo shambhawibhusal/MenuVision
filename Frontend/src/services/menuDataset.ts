@@ -254,7 +254,9 @@ export const resolveScannedItem = async (scannedItem: ScannedItem): Promise<Scan
             isVegetarian: datasetItem.isVegetarian,
             isGlutenFree: datasetItem.isGlutenFree,
             origin: datasetItem.origin,
-            category: datasetItem.category
+            category: datasetItem.category,
+            latitude: datasetItem.latitude ?? scannedItem.latitude,
+            longitude: datasetItem.longitude ?? scannedItem.longitude
         };
     } catch (error) {
         console.error('Error resolving scanned item:', error);
