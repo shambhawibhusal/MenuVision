@@ -16,6 +16,7 @@ interface ResultsTabProps {
     favoriteItems: Dish[];
     onToggleLike: (item: ScannedItem) => void;
     dishRatings?: Record<string, DishRating>;
+    onLocationClick?: (dish: Dish) => void;
 }
 
 import MenuCard from './MenuCard';
@@ -29,7 +30,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     setActiveTab,
     favoriteItems,
     onToggleLike,
-    dishRatings = {}
+    dishRatings = {},
+    onLocationClick
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
 
@@ -67,6 +69,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                                     onClick={() => setSelectedDish(item)}
                                     isLiked={isLiked}
                                     onLike={() => onToggleLike(item)}
+                                    onLocationClick={onLocationClick ? () => onLocationClick(item as Dish) : undefined}
                                     rating={userRating}
                                     averageRating={avgRating?.averageRating}
                                     totalReviews={avgRating?.totalReviews}

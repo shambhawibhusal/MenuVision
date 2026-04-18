@@ -415,6 +415,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
+    const geocodeAddress = async (address: string): Promise<{ lat: number; lng: number } | null> => {
+        try {
+            const res = await fetch(
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&accept-language=en`,
+                { 
+                    headers: { 
+                        'User-Agent': 'MenuVision/1.0',
+                        'Referer': 'https://menuvision.app'
+                    } 
+                }
+            );
+            if (!res.ok) return null;
+            const data = await res.json();
+            if (data && data.length > 0) {
+                return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+            }
+            return null;
+        } catch {
+            return null;
+        }
+    };
+
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
         { id: 1, text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
     ]);
@@ -688,6 +710,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
         setAnalyzing(true);
         try {
+            // 0. Geocode manually entered location if needed
+            let locationLat = userLocation?.lat;
+            let locationLng = userLocation?.lng;
+            
+            if (restaurantLocation && restaurantLocation.trim().length > 0) {
+                const coords = await geocodeAddress(restaurantLocation);
+                if (coords) {
+                    locationLat = coords.lat;
+                    locationLng = coords.lng;
+                    setUserLocation({ lat: coords.lat, lng: coords.lng, city: '' });
+                }
+            }
+
             // 1. Convert Blob to Base64 for sending to backend
             const base64Image = await blobToBase64(imageBlob);
 
@@ -748,8 +783,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         isGlutenFree: item.isGlutenFree,
                         origin: item.origin,
                         category: item.category,
-                        latitude: userLocation?.lat,
-                        longitude: userLocation?.lng
+                        latitude: locationLat,
+                        longitude: locationLng
                     }) || '';
                     console.log(`[Dataset] Added to dataset with ID: ${datasetId}`);
                 }
@@ -761,8 +796,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     price: item.price || 'Price not available',
                     place: restaurantName || 'Scanned Menu',
                     location: restaurantLocation || '',
-                    latitude: userLocation?.lat,
-                    longitude: userLocation?.lng
+                    latitude: locationLat,
+                    longitude: locationLng
                 });
             }
             
@@ -1088,6 +1123,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             favoriteItems={favoriteItems}
                             onToggleLike={toggleScannedItemLike}
                             dishRatings={dishRatings}
+                            onLocationClick={(dish) => setSelectedLocationDish(dish as Dish)}
                         />
                     )}
                     {activeTab === 'chat' && (
