@@ -317,7 +317,7 @@ export const mergeWithDataset = (
         name: datasetItem.name,
         price: extractedData.price, // Always use scanned price
         description: datasetItem.description || extractedData.description,
-        ingredients: datasetItem.ingredients?.join(', ') || extractedData.ingredients,
+        ingredients: datasetItem.ingredients || extractedData.ingredients,
         calories: datasetItem.calories || extractedData.calories,
         prepTime: datasetItem.prepTime || extractedData.prepTime,
         imageUrl: datasetItem.imageUrl || extractedData.imageUrl,

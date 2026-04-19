@@ -1383,7 +1383,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             <div className="space-y-6">
                                 <div>
                                     <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Ingredients</Label>
-                                    <p className="text-gray-700 leading-relaxed mt-1">{selectedDish?.ingredients || 'No ingredients listed'}</p>
+                                    {Array.isArray(selectedDish?.ingredients) && selectedDish.ingredients.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {selectedDish.ingredients.map((ingredient, idx) => (
+                                                <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                                                    {ingredient}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-700 leading-relaxed mt-1">No ingredients listed</p>
+                                    )}
                                 </div>
                                 <Separator />
                                 <div className="grid grid-cols-2 gap-4">
