@@ -17,6 +17,16 @@ export interface ScannedItem {
     category?: string;
     latitude?: number;
     longitude?: number;
+    nutrition?: Nutrition;
+}
+
+export interface Nutrition {
+    protein?: number;
+    carbohydrates?: number;
+    fat?: number;
+    fiber?: number;
+    sodium?: number;
+    [key: string]: number | undefined;
 }
 
 export interface MenuDatasetItem {
@@ -39,6 +49,7 @@ export interface MenuDatasetItem {
     createdAt?: Date;
     updatedAt?: Date;
     scanCount: number;
+    nutrition?: Nutrition;
 }
 
 export interface DishRating {

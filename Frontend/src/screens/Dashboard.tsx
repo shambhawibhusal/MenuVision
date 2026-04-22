@@ -784,7 +784,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         origin: item.origin,
                         category: item.category,
                         latitude: locationLat,
-                        longitude: locationLng
+                        longitude: locationLng,
+                        nutrition: item.nutrition
                     }) || '';
                     console.log(`[Dataset] Added to dataset with ID: ${datasetId}`);
                 }
@@ -797,7 +798,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     place: restaurantName || 'Scanned Menu',
                     location: restaurantLocation || '',
                     latitude: locationLat,
-                    longitude: locationLng
+                    longitude: locationLng,
+                    nutrition: item.nutrition
                 });
             }
             
@@ -955,10 +957,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             } else {
                 // New - add to dataset with GPT-generated image
                 console.log(`[Chat] Adding new dish to dataset: "${dishName}"`);
-                const newDishId = await addDishToDataset({
+const newDishId = await addDishToDataset({
                     name: dishName,
                     description: data.data?.description,
-                    ingredients: Array.isArray(data.data?.ingredients) ? data.data.ingredients : data.data?.ingredients ? [data.data.ingredients] : undefined,
+                    ingredients: Array.isArray(data.data?.ingredients) ? data.data.ingredients : data.data?.ingredients ? [data.data?.ingredients] : undefined,
                     allergens: data.data?.allergens,
                     calories: data.data?.calories ? `${data.data.calories} kcal` : undefined,
                     prepTime: data.data?.preparationTime,
@@ -967,7 +969,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     isVegetarian: data.data?.isVegetarian,
                     isGlutenFree: data.data?.isGlutenFree,
                     origin: data.data?.origin,
-                    category: data.data?.category
+                    category: data.data?.category,
+                    nutrition: data.data?.nutrition
                 });
                 console.log(`[Chat] Added to dataset with ID: ${newDishId}`);
                 
@@ -980,7 +983,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             
             const replyText = data.success && data.data
                 ? Object.entries(data.data)
-                    .map(([k, v]) => `**${k}**: ${Array.isArray(v) ? (v as string[]).join(', ') : v ?? 'N/A'}`)
+                    .map(([k, v]) => {
+                        if (k === 'nutrition' && typeof v === 'object' && v !== null) {
+                            const n = v as any;
+                            return `**nutrition**: Protein: ${n.protein ?? 0}g, Carbs: ${n.carbohydrates ?? 0}g, Fat: ${n.fat ?? 0}g, Fiber: ${n.fiber ?? 0}g, Sodium: ${n.sodium ?? 0}mg`;
+                        }
+                        return `**${k}**: ${Array.isArray(v) ? (v as string[]).join(', ') : v ?? 'N/A'}`;
+                    })
                     .join('\n')
                 : (data.error || 'Sorry, I could not get a response.');
             const botMsg: ChatMessage = {
@@ -1395,6 +1404,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                         <p className="text-gray-700 leading-relaxed mt-1">No ingredients listed</p>
                                     )}
                                 </div>
+                                {(selectedDish?.nutrition) && (
+                                    <>
+                                        <Separator />
+                                        <div>
+                                            <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Nutrition</Label>
+                                            <div className="grid grid-cols-2 gap-3 mt-2">
+                                                {selectedDish?.nutrition?.protein !== undefined && selectedDish?.nutrition?.protein !== null && (
+                                                    <div className="bg-purple-50 px-3 py-2 rounded-lg">
+                                                        <p className="text-xs text-purple-600 font-medium">Protein</p>
+                                                        <p className="text-gray-900 font-bold">{selectedDish.nutrition.protein}g</p>
+                                                    </div>
+                                                )}
+                                                {selectedDish?.nutrition?.carbohydrates !== undefined && selectedDish?.nutrition?.carbohydrates !== null && (
+                                                    <div className="bg-blue-50 px-3 py-2 rounded-lg">
+                                                        <p className="text-xs text-blue-600 font-medium">Carbs</p>
+                                                        <p className="text-gray-900 font-bold">{selectedDish.nutrition.carbohydrates}g</p>
+                                                    </div>
+                                                )}
+                                                {selectedDish?.nutrition?.fat !== undefined && selectedDish?.nutrition?.fat !== null && (
+                                                    <div className="bg-yellow-50 px-3 py-2 rounded-lg">
+                                                        <p className="text-xs text-yellow-700 font-medium">Fat</p>
+                                                        <p className="text-gray-900 font-bold">{selectedDish.nutrition.fat}g</p>
+                                                    </div>
+                                                )}
+                                                {selectedDish?.nutrition?.fiber !== undefined && selectedDish?.nutrition?.fiber !== null && (
+                                                    <div className="bg-green-50 px-3 py-2 rounded-lg">
+                                                        <p className="text-xs text-green-600 font-medium">Fiber</p>
+                                                        <p className="text-gray-900 font-bold">{selectedDish.nutrition.fiber}g</p>
+                                                    </div>
+                                                )}
+                                                {selectedDish?.nutrition?.sodium !== undefined && selectedDish?.nutrition?.sodium !== null && (
+                                                    <div className="bg-red-50 px-3 py-2 rounded-lg">
+                                                        <p className="text-xs text-red-600 font-medium">Sodium</p>
+                                                        <p className="text-gray-900 font-bold">{selectedDish.nutrition.sodium}mg</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                                 <Separator />
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>

@@ -256,7 +256,8 @@ export const resolveScannedItem = async (scannedItem: ScannedItem): Promise<Scan
             origin: datasetItem.origin,
             category: datasetItem.category,
             latitude: datasetItem.latitude ?? scannedItem.latitude,
-            longitude: datasetItem.longitude ?? scannedItem.longitude
+            longitude: datasetItem.longitude ?? scannedItem.longitude,
+            nutrition: datasetItem.nutrition
         };
     } catch (error) {
         console.error('Error resolving scanned item:', error);

@@ -182,6 +182,13 @@ async function saveDishToDataset(dishData: {
     isVegetarian?: boolean | null;
     isGlutenFree?: boolean | null;
     imageUrl?: string | null;
+    nutrition: {
+        protein: number;
+        carbohydrates: number;
+        fat: number;
+        fiber: number;
+        sodium: number;
+    };
 }): Promise<string | null> {
     try {
         const normalizedName = normalizeDishName(dishData.name);
@@ -227,7 +234,8 @@ async function saveDishToDataset(dishData: {
             imageUrl: imageUrlToStore,
             scanCount: 1,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            nutrition: dishData.nutrition || null
         });
         
         console.log(`[Dataset] Saved new dish: "${dishData.name}" with ID: ${dishId}`);
@@ -254,6 +262,13 @@ const FoodItemSchema = z.object({
     isVegetarian: z.boolean().nullable(),
     isGlutenFree: z.boolean().nullable(),
     imageUrl: z.string().nullable().optional(),
+    nutrition: z.object({
+        protein: z.number(),
+        carbohydrates: z.number(),
+        fat: z.number(),
+        fiber: z.number(),
+        sodium: z.number(),
+    }),
 });
 
 const MenuSchema = z.object({
@@ -335,8 +350,15 @@ app.post("/analyzeMenu", async (req: Request<{}, {}, AnalyzeMenuRequestBody>, re
       - origin: The cuisine origin (e.g., Italian, Japanese, Indian)
       - isVegan/isVegetarian/isGlutenFree: Determine based on the dish
       - price: If not visible in the image, estimate a realistic price in Nepalese Rupees (NPR). Format as "Rs. XXX" (e.g., "Rs. 250", "Rs. 450")
+      - nutrition: Estimate nutritional values per serving - MUST provide ALL 5 values:
+        - protein: grams (e.g., 25)
+        - carbohydrates: grams (e.g., 45)
+        - fat: grams (e.g., 15)
+        - fiber: grams (e.g., 5)
+        - sodium: milligrams (e.g., 400)
 
-NEVER return null or empty values for ingredients, calories, preparationTime, or description - always infer reasonable values based on the dish name. Be creative but realistic with your estimates.`,
+NEVER return null or empty values for ingredients, calories, preparationTime, or description - always infer reasonable values based on the dish name. Be creative but realistic with your estimates.
+ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field.`,
             messages: [
                 {
                     role: "user",
@@ -357,6 +379,14 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
             object.menuItems.map(async (item) => {
                 const existingDish = await checkDishInDataset(item.name);
                 
+                const normalizedNutrition = item.nutrition ? {
+                    protein: item.nutrition.protein ?? 0,
+                    carbohydrates: item.nutrition.carbohydrates ?? 0,
+                    fat: item.nutrition.fat ?? 0,
+                    fiber: item.nutrition.fiber ?? 0,
+                    sodium: item.nutrition.sodium ?? 0
+                } : { protein: 0, carbohydrates: 0, fat: 0, fiber: 0, sodium: 0 };
+                
                 if (existingDish) {
                     console.log(`[Dataset] Reusing existing dish: "${item.name}"`);
                     fromCache = true;
@@ -374,7 +404,14 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
                         isVegetarian: existingDish.isVegetarian,
                         isGlutenFree: existingDish.isGlutenFree,
                         imageUrl: existingDish.imageUrl,
-                        fromDataset: true
+                        fromDataset: true,
+                        nutrition: existingDish.nutrition ? {
+                            protein: existingDish.nutrition.protein ?? 0,
+                            carbohydrates: existingDish.nutrition.carbohydrates ?? 0,
+                            fat: existingDish.nutrition.fat ?? 0,
+                            fiber: existingDish.nutrition.fiber ?? 0,
+                            sodium: existingDish.nutrition.sodium ?? 0
+                        } : normalizedNutrition
                     };
                 }
                 
@@ -394,13 +431,15 @@ NEVER return null or empty values for ingredients, calories, preparationTime, or
                     isVegan: item.isVegan,
                     isVegetarian: item.isVegetarian,
                     isGlutenFree: item.isGlutenFree,
-                    imageUrl: imageUrl
+                    imageUrl: imageUrl,
+                    nutrition: normalizedNutrition
                 });
                 
                 return {
                     ...item,
                     imageUrl: imageUrl || null,
-                    fromDataset: false
+                    fromDataset: false,
+                    nutrition: normalizedNutrition
                 };
             })
         );
@@ -470,7 +509,8 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
                     origin: existingDish.origin,
                     isVegan: existingDish.isVegan,
                     isVegetarian: existingDish.isVegetarian,
-                    isGlutenFree: existingDish.isGlutenFree
+                    isGlutenFree: existingDish.isGlutenFree,
+                    nutrition: existingDish.nutrition
                 },
                 fromCache: true
             });
@@ -480,7 +520,7 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
 
         const { text } = await generateText({
             model: model,
-            system: "You are a helpful food expert AI. Provide detailed information about the requested food item. You MUST return ONLY a JSON object that strictly follows the provided schema. Do not include any other text, markdown blocks, or explanations. All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., 'Rs. 250', 'Rs. 450').",
+            system: "You are a helpful food expert AI. Provide detailed information about the requested food item. You MUST return ONLY a JSON object that strictly follows the provided schema. Do not include any other text, markdown blocks, or explanations. All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., 'Rs. 250', 'Rs. 450'). ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field.",
             prompt: `Return information for "${message}" strictly according to this JSON schema:
             {
                 "name": "string",
@@ -494,7 +534,14 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
                 "origin": "string or null",
                 "isVegan": "boolean or null",
                 "isVegetarian": "boolean or null",
-                "isGlutenFree": "boolean or null"
+                "isGlutenFree": "boolean or null",
+                "nutrition": {
+                    "protein": "number (e.g., 25)",
+                    "carbohydrates": "number (e.g., 45)",
+                    "fat": "number (e.g., 15)",
+                    "fiber": "number (e.g., 5)",
+                    "sodium": "number (e.g., 400)"
+                }
             }`,
         });
 
@@ -512,6 +559,14 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
             preparationTime: formatPrepTime(object.preparationTime)
         };
 
+        const chatNutrition = object.nutrition ? {
+            protein: object.nutrition.protein ?? 0,
+            carbohydrates: object.nutrition.carbohydrates ?? 0,
+            fat: object.nutrition.fat ?? 0,
+            fiber: object.nutrition.fiber ?? 0,
+            sodium: object.nutrition.sodium ?? 0
+        } : { protein: 0, carbohydrates: 0, fat: 0, fiber: 0, sodium: 0 };
+
         await saveDishToDataset({
             name: dishName,
             description: object.description,
@@ -525,7 +580,8 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
             isVegan: object.isVegan,
             isVegetarian: object.isVegetarian,
             isGlutenFree: object.isGlutenFree,
-            imageUrl: imageUrl
+            imageUrl: imageUrl,
+            nutrition: chatNutrition
         });
 
         res.json({
