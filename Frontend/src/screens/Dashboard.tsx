@@ -4,6 +4,7 @@ import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { containerStyle } from '../utils/styles';
+import { useTouchScroll } from '@/hooks/useTouchScroll';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,13 +20,16 @@ import { Label } from "@/components/ui/label";
 import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Send } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating } from '@/types/dashboard';
+import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating, MealType } from '@/types/dashboard';
 
 import { useDishes } from '@/hooks/useDishes';
 import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDishReviews } from '@/hooks/useDishReviews';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
+import { useMealLog } from '@/hooks/useMealLog';
+import { useDishPopularity } from '@/hooks/useDishPopularity';
+import { useToast, ToastContainer } from '@/hooks/useToast';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
 import { formatPrepTime } from '../utils/formatters';
@@ -37,9 +41,11 @@ import ResultsTab from '@/components/dashboard/ResultsTab';
 import ChatTab from '@/components/dashboard/ChatTab';
 import ProfileTab from '@/components/dashboard/ProfileTab';
 import HistoryTab from '@/components/dashboard/HistoryTab';
+import MealLogTab from '@/components/dashboard/MealLogTab';
 import NavIcon from '@/components/dashboard/NavIcon';
 import StarRating from '@/components/ui/StarRating';
 import { LocationMap } from '@/components/dashboard/LocationMap';
+import ImagePreviewModal from '@/components/ui/ImagePreviewModal';
 
 interface DashboardProps {
     onLogout: () => void;
@@ -80,11 +86,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [resolvedRecommendedDishes, setResolvedRecommendedDishes] = useState<Dish[]>([]);
     const [resolvedSearchableDishes, setResolvedSearchableDishes] = useState<Dish[]>([]);
     const [selectedLocationDish, setSelectedLocationDish] = useState<Dish | null>(null);
+    const [selectedMealType, setSelectedMealType] = useState<MealType>('lunch');
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
+    const { addToLog, isInLog: isDishInMealLog, todayLog } = useMealLog();
+    const { toasts, showToast, removeToast } = useToast();
+    const { containerRef } = useTouchScroll({ enabled: true, speed: 1 });
 
     const dishIds = useMemo(() => allDishes.map(d => d.datasetId || String(d.id)), [allDishes]);
     const dishAverageRatings = useDishAverageRatings(dishIds);
+    const { popularityMap } = useDishPopularity(dishIds);
 
     React.useEffect(() => {
         const fetchUserData = async () => {
@@ -261,24 +272,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [fullText, setFullText] = useState('');
     const [viewMode, setViewMode] = useState<'items' | 'text'>('items');
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
+    const [previewImage, setPreviewImage] = useState<{ url: string; alt: string } | null>(null);
 
     useEffect(() => {
         if (!selectedDish) {
             setCurrentDishFirestoreId(null);
             return;
         }
+        const selectedDishName = selectedDish?.name || '';
         const existing = allDishes.find(
-            (d) => d.name.toLowerCase() === selectedDish.name.toLowerCase()
+            (d) => (d.name || '').toLowerCase() === selectedDishName.toLowerCase()
         );
         const dishId = 'id' in selectedDish ? (selectedDish as any).id : undefined;
         const firestoreId = existing
             ? String(existing.id)
             : dishId
                 ? String(dishId)
-                : selectedDish.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+                : selectedDishName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
         setCurrentDishFirestoreId(firestoreId);
 
-        const ratingKey = `dish_${selectedDish.name}`;
+        const ratingKey = `dish_${selectedDishName}`;
         const existingRating = dishRatings[ratingKey];
         setUserRating(existingRating?.rating || 0);
         setFeedbackComment(existingRating?.comment || '');
@@ -472,7 +485,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const pool: Dish[] = [];
 
         const addDish = (dish: Dish) => {
-            const key = `${dish.name.toLowerCase()}__${(dish.place || '').toLowerCase()}`;
+            const key = `${(dish.name || '').toLowerCase()}__${(dish.place || '').toLowerCase()}`;
             if (!seen.has(key)) {
                 seen.add(key);
                 pool.push(dish);
@@ -586,7 +599,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
         let matchesRating = true;
         if (activeFilters.rating) {
-            const normalizedName = dish.name.toLowerCase().trim();
+            const normalizedName = (dish.name || '').toLowerCase().trim();
             const ratingKey = `dish_${normalizedName}`;
             
             const localRating = dishRatings[ratingKey];
@@ -1091,7 +1104,7 @@ const newDishId = await addDishToDataset({
 
     return (
         <div className="w-screen h-screen flex items-center justify-center">
-            <div className={containerStyle + " flex flex-col shadow-2xl relative overflow-hidden"}>
+            <div className="relative w-full h-full flex flex-col shadow-2xl bg-gray-50 overflow-hidden touch-pan-y">
                 {dishesLoading && (
                     <div className="absolute inset-0 bg-white/80 z-[200] flex items-center justify-center">
                         <div className="text-center">
@@ -1100,7 +1113,7 @@ const newDishId = await addDishToDataset({
                         </div>
                     </div>
                 )}
-                <main className="flex-1 overflow-y-auto z-[3] relative custom-scrollbar">
+                <main ref={containerRef} className="flex-1 overflow-y-auto z-[3] relative overscroll-contain custom-scrollbar">
                     {activeTab === 'home' && (
                         <HomeTab
                             searchText={searchText}
@@ -1110,8 +1123,19 @@ const newDishId = await addDishToDataset({
                             favoriteItems={favoriteItems}
                             toggleRecommendedLike={toggleRecommendedLike}
                             onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)}
+                            onAddToMealLog={(dish) => {
+                                if (!isDishInMealLog(dish?.name || '')) {
+                                    addToLog(dish as ScannedItem, selectedMealType);
+                                    showToast(`${dish?.name || 'Dish'} added to ${selectedMealType}!`, 'success');
+                                } else {
+                                    showToast(`${dish?.name || 'Dish'} is already in your meal log`, 'info');
+                                }
+                            }}
+                            isDishInMealLog={isDishInMealLog}
                             dishRatings={dishRatings}
                             dishAverageRatings={dishAverageRatings}
+                            dishPopularity={popularityMap}
+                            userAllergens={foodProfile.allergens}
                             activeFilters={activeFilters}
                             setActiveFilters={setActiveFilters}
                             locationLoading={locationLoading}
@@ -1119,6 +1143,8 @@ const newDishId = await addDishToDataset({
                             sortBy={sortBy}
                             setSortBy={setSortBy}
                             onLocationClick={(dish) => setSelectedLocationDish(dish as Dish)}
+                            onNavigateToMealLog={() => setActiveTab('meallog')}
+                            mealLogEntries={todayLog?.entries || []}
                         />
                     )}
                     {activeTab === 'results' && (
@@ -1133,6 +1159,16 @@ const newDishId = await addDishToDataset({
                             onToggleLike={toggleScannedItemLike}
                             dishRatings={dishRatings}
                             onLocationClick={(dish) => setSelectedLocationDish(dish as Dish)}
+                            userAllergens={foodProfile.allergens}
+                            onAddToMealLog={(item) => {
+                                if (!isDishInMealLog(item?.name || '')) {
+                                    addToLog(item, selectedMealType);
+                                    showToast(`${item?.name || 'Dish'} added to ${selectedMealType}!`, 'success');
+                                } else {
+                                    showToast(`${item?.name || 'Dish'} is already in your meal log`, 'info');
+                                }
+                            }}
+                            isDishInMealLog={isDishInMealLog}
                         />
                     )}
                     {activeTab === 'chat' && (
@@ -1172,6 +1208,14 @@ const newDishId = await addDishToDataset({
                             }}
                             onSelectFavorite={(dish) => setSelectedDish(dish as ScannedItem)}
                             dishRatings={dishRatings}
+                        />
+                    )}
+                    {activeTab === 'meallog' && (
+                        <MealLogTab 
+                            onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)} 
+                            onShowToast={showToast}
+                            selectedMealType={selectedMealType}
+                            onMealTypeChange={setSelectedMealType}
                         />
                     )}
                 </main>
@@ -1337,10 +1381,15 @@ const newDishId = await addDishToDataset({
                 </Dialog>
 
                 <Dialog open={!!selectedDish} onOpenChange={() => setSelectedDish(null)}>
-                    <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl max-h-[90vh]">
+                    <DialogContent showCloseButton={false} className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl max-h-[90vh]">
                         <div className="h-32 bg-amber-400 relative shrink-0">
                             {selectedDish?.imageUrl ? (
-                                <img src={selectedDish.imageUrl} alt={selectedDish.name} className="w-full h-full object-cover" />
+                                <img 
+                                    src={selectedDish.imageUrl} 
+                                    alt={selectedDish.name} 
+                                    className="w-full h-full object-cover cursor-zoom-in"
+                                    onClick={() => setPreviewImage({ url: selectedDish.imageUrl, alt: selectedDish.name })}
+                                />
                             ) : null}
                             <Button
                                 variant="ghost"
@@ -1379,7 +1428,7 @@ const newDishId = await addDishToDataset({
                             {selectedDish?.place && (
                                 <button
                                     className="text-sm text-gray-500 flex items-center gap-1 mb-6 hover:text-amber-600 transition-colors"
-                                    onClick={() => setSelectedLocationDish(selectedDish)}
+                                    onClick={() => setSelectedLocationDish(selectedDish as Dish)}
                                     disabled={!selectedDish?.latitude || !selectedDish?.longitude}
                                 >
                                     <MapPin size={14} /> {selectedDish.place}{selectedDish.location ? `, ${selectedDish.location}` : ''}
@@ -1706,6 +1755,15 @@ const newDishId = await addDishToDataset({
                         </div>
                     </div>
                 )}
+
+                <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+                <ImagePreviewModal
+                    isOpen={!!previewImage}
+                    onClose={() => setPreviewImage(null)}
+                    imageUrl={previewImage?.url || ''}
+                    alt={previewImage?.alt || ''}
+                />
             </div>
         </div>
     );

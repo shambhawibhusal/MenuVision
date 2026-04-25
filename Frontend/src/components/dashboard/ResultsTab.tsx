@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScannedItem, Tab, Dish, DishRating } from '@/types/dashboard';
 import { resolveScannedItems } from '@/services/menuDataset';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
+import { checkAllergens } from '@/services/allergyCheck';
 
 interface ResultsTabProps {
     viewMode: 'items' | 'text';
@@ -17,6 +18,9 @@ interface ResultsTabProps {
     onToggleLike: (item: ScannedItem) => void;
     dishRatings?: Record<string, DishRating>;
     onLocationClick?: (dish: Dish) => void;
+    userAllergens?: string[];
+    onAddToMealLog?: (item: ScannedItem) => void;
+    isDishInMealLog?: (dishName: string) => boolean;
 }
 
 import MenuCard from './MenuCard';
@@ -31,11 +35,14 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     favoriteItems,
     onToggleLike,
     dishRatings = {},
-    onLocationClick
+    onLocationClick,
+    userAllergens = [],
+    onAddToMealLog,
+    isDishInMealLog
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
 
-    const dishIds = resolvedItems.map(item => String(item.id)).filter(Boolean);
+    const dishIds = resolvedItems.map(item => item.datasetId || item.name).filter(Boolean);
     const dishAverageRatings = useDishAverageRatings(dishIds);
 
     useEffect(() => {
@@ -58,10 +65,13 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     <div className="flex flex-col gap-4 pb-20">
                         {resolvedItems.length === 0 && <p className="text-gray-500 text-center py-10 w-full">No items found.</p>}
                         {resolvedItems.map((item, index) => {
-                            const isLiked = favoriteItems.some(fav => fav.name === item.name);
-                            const ratingKey = `dish_${item.name.toLowerCase().trim()}`;
+                            const itemName = item?.name || 'Unknown';
+                            const isLiked = favoriteItems.some(fav => fav.name === itemName);
+                            const ratingKey = `dish_${itemName.toLowerCase().trim()}`;
                             const userRating = dishRatings[ratingKey]?.rating || 0;
-                            const avgRating = dishAverageRatings[item.datasetId || String(item.id)];
+                            const avgRating = dishAverageRatings[item?.datasetId || itemName];
+                            const inMealLog = isDishInMealLog ? isDishInMealLog(itemName) : false;
+                            const allergyInfo = checkAllergens(item, userAllergens);
                             return (
                                 <MenuCard
                                     key={index}
@@ -70,6 +80,9 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                                     isLiked={isLiked}
                                     onLike={() => onToggleLike(item)}
                                     onLocationClick={onLocationClick ? () => onLocationClick(item as Dish) : undefined}
+                                    onAddToMealLog={onAddToMealLog ? () => onAddToMealLog(item) : undefined}
+                                    isInMealLog={inMealLog}
+                                    allergyInfo={allergyInfo}
                                     rating={userRating}
                                     averageRating={avgRating?.averageRating}
                                     totalReviews={avgRating?.totalReviews}

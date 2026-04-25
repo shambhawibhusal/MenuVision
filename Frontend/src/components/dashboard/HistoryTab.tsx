@@ -21,7 +21,7 @@ interface HistoryTabProps {
 const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite, dishRatings = {} }) => {
     const [resolvedFavorites, setResolvedFavorites] = useState<Dish[]>([]);
 
-    const dishIds = resolvedFavorites.map(dish => String(dish.id)).filter(Boolean);
+    const dishIds = resolvedFavorites.map((dish, index) => dish.datasetId || String(dish.id || index)).filter(Boolean);
     const dishAverageRatings = useDishAverageRatings(dishIds);
 
     useEffect(() => {
@@ -91,13 +91,14 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                     {resolvedFavorites.length === 0 ? (
                         <div className="text-center py-20 text-gray-400">No favorite dishes yet.</div>
                     ) : (
-                        resolvedFavorites.map(dish => {
-                            const ratingKey = `dish_${dish.name.toLowerCase().trim()}`;
+                        resolvedFavorites.map((dish, index) => {
+                            const dishName = dish?.name || 'Unknown';
+                            const ratingKey = `dish_${dishName.toLowerCase().trim()}`;
                             const userRating = dishRatings[ratingKey]?.rating || 0;
-                            const avgRating = dishAverageRatings[dish.datasetId || String(dish.id)];
+                            const avgRating = dishAverageRatings[dish?.datasetId || String(dish?.id || index)];
                             return (
                                 <MenuCard
-                                    key={dish.id}
+                                    key={dish?.id || index}
                                     item={dish}
                                     onClick={() => onSelectFavorite(dish)}
                                     isLiked={true}

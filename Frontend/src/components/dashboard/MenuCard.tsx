@@ -1,11 +1,18 @@
 import React from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
-import { Heart, MapPin, Star, Clock } from 'lucide-react';
+import { Heart, MapPin, Clock, UtensilsCrossed, Check, TrendingUp, Eye, AlertTriangle, Shield, Leaf } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
 import { normalizePrice } from '@/utils/recommendations';
 import { formatPrepTime } from '@/utils/formatters';
+import { getPopularityLabel, getPopularityColor } from '@/hooks/useDishPopularity';
+import { checkAllergens } from '@/services/allergyCheck';
+
+interface AllergyInfo {
+    isSafe: boolean;
+    matchingAllergens: string[];
+}
 
 interface MenuCardProps {
     item: ScannedItem;
@@ -13,14 +20,29 @@ interface MenuCardProps {
     isLiked?: boolean;
     onLike?: () => void;
     onLocationClick?: () => void;
+    onAddToMealLog?: () => void;
+    isInMealLog?: boolean;
+    scanCount?: number;
+    viewCount?: number;
     rating?: number;
     averageRating?: number;
     totalReviews?: number;
+    userAllergens?: string[];
+    allergyInfo?: AllergyInfo;
+    showHealthierBadge?: boolean;
 }
 
-const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, onLocationClick, rating = 0, averageRating = 0, totalReviews = 0 }) => {
+const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, onLocationClick, onAddToMealLog, isInMealLog = false, scanCount = 0, viewCount = 0, rating = 0, averageRating = 0, totalReviews = 0, userAllergens = [], allergyInfo, showHealthierBadge = false }) => {
+    const computedAllergyInfo = allergyInfo || (userAllergens.length > 0 ? checkAllergens(item, userAllergens) : null);
+    const isAllergenSafe = computedAllergyInfo?.isSafe ?? true;
+    const hasAllergenWarning = !isAllergenSafe;
+
+    const cardClassName = `cursor-pointer bg-white hover:bg-amber-50/30 border text-gray-900 transition-all overflow-hidden group relative shadow-sm hover:shadow-md hover:shadow-amber-100/50 transform hover:-translate-y-0.5 w-full rounded-xl ${
+        hasAllergenWarning ? 'border-red-300 bg-red-50/20' : 'border-gray-100'
+    }`;
+
     return (
-        <Card onClick={onClick} className="cursor-pointer bg-white hover:bg-amber-50/30 border border-gray-100 text-gray-900 transition-all overflow-hidden group relative shadow-sm hover:shadow-md hover:shadow-amber-100/50 transform hover:-translate-y-0.5 w-full rounded-xl">
+        <Card onClick={onClick} className={cardClassName}>
             <div className="absolute inset-0 bg-gradient-to-r from-amber-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
             <div className="flex flex-col sm:flex-row sm:items-center h-full relative z-10">
@@ -36,6 +58,16 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                             <CardTitle className="text-xl font-bold leading-tight decoration-amber-400 group-hover:underline decoration-2 underline-offset-4 tracking-tight text-gray-900">
                                 {item.name}
                             </CardTitle>
+                            {hasAllergenWarning && (
+                                <div className="flex items-center gap-1 mt-1">
+                                    <span className="text-xs font-medium text-red-600 bg-red-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <AlertTriangle size={12} /> Contains: {computedAllergyInfo?.matchingAllergens.join(', ')}
+                                    </span>
+                                    <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <Shield size={12} /> Safe option available
+                                    </span>
+                                </div>
+                            )}
 {item.place && (
                                 <button
                                     className="text-xs text-gray-500 flex items-center gap-1 mt-0.5 hover:text-amber-600 transition-colors disabled:opacity-50"
@@ -107,7 +139,37 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                         )}
                     </div>
 
+                    {onAddToMealLog && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className={`h-10 w-10 rounded-full transition-colors ${isInMealLog ? 'bg-green-100 hover:bg-green-200 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-amber-500'}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onAddToMealLog();
+                            }}
+                            title={isInMealLog ? 'Added to meal log' : 'Add to meal log'}
+                        >
+                            {isInMealLog ? <Check size={20} /> : <UtensilsCrossed size={20} />}
+                        </Button>
+                    )}
+
                     <div className="flex gap-2 flex-wrap">
+                        {showHealthierBadge && (item.isVegetarian || item.isVegan || item.isGlutenFree) && (
+                            <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
+                                <Leaf size={12} /> Healthier Choice
+                            </span>
+                        )}
+                        {scanCount > 0 && (
+                            <span className={`text-xs font-medium px-2 py-1 rounded-md flex items-center gap-1 border ${getPopularityColor(scanCount)}`}>
+                                <TrendingUp size={12} /> {getPopularityLabel(scanCount)} ({scanCount})
+                            </span>
+                        )}
+                        {viewCount > 0 && (
+                            <span className="text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md flex items-center gap-1">
+                                <Eye size={12} /> {viewCount}
+                            </span>
+                        )}
                         {item.calories && (
                             <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
                                 🔥 {item.calories}

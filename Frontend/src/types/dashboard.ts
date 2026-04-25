@@ -90,7 +90,7 @@ export interface ChatMessage {
     imageUrl?: string | null;
 }
 
-export type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history';
+export type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history' | 'meallog';
 
 export const ALLERGENS = [
     'Dairy',
@@ -122,3 +122,26 @@ export const DEFAULT_FOOD_PROFILE: FoodProfile = {
     allergens: [],
     onboardingCompleted: false
 };
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface MealLogEntry {
+    id: string;
+    dishId: string;
+    dishName: string;
+    dishDatasetId?: string;
+    price: string;
+    place?: string;
+    calories?: string;
+    imageUrl?: string | null;
+    mealType: MealType;
+    date: string;
+    addedAt: string;
+}
+
+export interface DailyMealLog {
+    date: string;
+    entries: MealLogEntry[];
+    totalCalories?: number;
+    totalCost?: number;
+}
