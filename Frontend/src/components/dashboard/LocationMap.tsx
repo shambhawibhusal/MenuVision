@@ -13,11 +13,6 @@ const mapContainerStyle = {
   borderRadius: '12px',
 };
 
-const defaultCenter = {
-  lat: 27.7172,
-  lng: 85.3240,
-};
-
 const mapOptions: google.maps.MapOptions = {
   disableDefaultUI: false,
   zoomControl: true,

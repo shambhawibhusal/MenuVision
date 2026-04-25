@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Search, Camera, Leaf, X, SlidersHorizontal, MapPin, Loader2, Star, ArrowUpDown, SearchX, History, Trash2 } from "lucide-react";
+import { Search, Camera, Leaf, X, SlidersHorizontal, MapPin, Loader2, Star, ArrowUpDown, SearchX, History, Trash2, UtensilsCrossed, Flame, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dish, DishRating } from '@/types/dashboard';
+import { Dish, DishRating, MealLogEntry } from '@/types/dashboard';
 import MenuCard from './MenuCard';
 import { getSuggestions, getRecentSearches, addRecentSearch, clearRecentSearches } from '@/utils/search';
 import { normalizePrice } from '@/utils/recommendations';
@@ -14,6 +14,12 @@ interface DishAverageRating {
     totalReviews: number;
 }
 
+interface DishPopularity {
+    dishId: string;
+    scanCount: number;
+    viewCount: number;
+}
+
 interface HomeTabProps {
     searchText: string;
     setSearchText: (val: string) => void;
@@ -22,8 +28,12 @@ interface HomeTabProps {
     favoriteItems: Dish[];
     toggleRecommendedLike: (dish: Dish) => void;
     onSelectDish: (dish: Dish) => void;
+    onAddToMealLog?: (dish: Dish) => void;
+    isDishInMealLog?: (dishName: string) => boolean;
     dishRatings?: Record<string, DishRating>;
     dishAverageRatings?: Record<string, DishAverageRating>;
+    dishPopularity?: Record<string, DishPopularity>;
+    userAllergens?: string[];
     activeFilters: {
         isVegetarian: boolean;
         isVegan: boolean;
@@ -49,6 +59,8 @@ interface HomeTabProps {
     sortBy: string;
     setSortBy: (val: string) => void;
     onLocationClick?: (dish: Dish) => void;
+    onNavigateToMealLog?: () => void;
+    mealLogEntries?: MealLogEntry[];
 }
 
 const SORT_OPTIONS = [
@@ -67,14 +79,21 @@ const HomeTab: React.FC<HomeTabProps> = ({
     favoriteItems,
     toggleRecommendedLike,
     onSelectDish,
+    onAddToMealLog,
+    isDishInMealLog,
     dishRatings = {},
     dishAverageRatings = {},
+    dishPopularity = {},
+    userAllergens = [],
     activeFilters,
     setActiveFilters,
     locationLoading = false,
     allDishes,
     sortBy,
-    setSortBy
+    setSortBy,
+    onLocationClick,
+    onNavigateToMealLog,
+    mealLogEntries = []
 }) => {
     const [showFilters, setShowFilters] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -83,6 +102,24 @@ const HomeTab: React.FC<HomeTabProps> = ({
     const filterRef = useRef<HTMLDivElement>(null);
     const searchRef = useRef<HTMLDivElement>(null);
     const sortRef = useRef<HTMLDivElement>(null);
+
+    const mealLogStats = useMemo(() => {
+        let totalCalories = 0;
+        let totalCost = 0;
+        mealLogEntries.forEach(entry => {
+            const calStr = String(entry.calories || '');
+            const calMatch = calStr.match(/(\d+)/);
+            if (calMatch) totalCalories += parseInt(calMatch[1]);
+            const priceStr = String(entry.price || '');
+            const priceMatch = priceStr.match(/(\d+)/);
+            if (priceMatch) totalCost += parseInt(priceMatch[1]);
+        });
+        return {
+            count: mealLogEntries.length,
+            totalCalories,
+            totalCost
+        };
+    }, [mealLogEntries]);
     const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -463,7 +500,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
             <Card
                 onClick={() => setShowScanOptions(true)}
-                className="bg-green-500 border-none text-white overflow-hidden relative cursor-pointer group mb-10 hover:shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all"
+                className="bg-green-500 border-none text-white relative cursor-pointer group mb-6 hover:shadow-[0_0_20px_rgba(34,197,94,0.4)] transition-all"
             >
                 <div className="absolute top-0 right-0 p-8 transform translate-x-4 -translate-y-4 opacity-10 group-hover:scale-110 transition-transform">
                     <Camera size={120} />
@@ -478,28 +515,66 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </CardContent>
             </Card>
 
+            {mealLogEntries.length > 0 && (
+                <Card
+                    onClick={onNavigateToMealLog}
+                    className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 cursor-pointer hover:shadow-md hover:scale-[1.01] transition-all mb-10"
+                >
+                    <CardContent className="p-4 flex items-center gap-4">
+                        <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shrink-0">
+                            <UtensilsCrossed size={24} className="text-white" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-gray-900">My Meal Log</h4>
+                                <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                                    {mealLogStats.count}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
+                                <span className="flex items-center gap-1">
+                                    <Flame size={12} className="text-orange-500" /> {mealLogStats.totalCalories} cal
+                                </span>
+                                <span>•</span>
+                                <span>Rs. {mealLogStats.totalCost}</span>
+                            </div>
+                        </div>
+                        <ChevronRight size={20} className="text-amber-500 shrink-0" />
+                    </CardContent>
+                </Card>
+            )}
+
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-gray-900 text-xl font-bold px-1">Recommended for You</h3>
             </div>
 
             {filteredDishes.length > 0 ? (
                 <div className="flex flex-col gap-4">
-                    {filteredDishes.map(dish => {
+                    {filteredDishes.map((dish, index) => {
+                        const dishName = dish?.name || 'Unknown';
                         const isLiked = favoriteItems.some(fav => fav.id === dish.id);
-                        const ratingKey = `dish_${dish.name.toLowerCase().trim()}`;
+                        const ratingKey = `dish_${dishName.toLowerCase().trim()}`;
                         const userRating = dishRatings[ratingKey]?.rating || 0;
-                        const avgRating = dishAverageRatings[dish.datasetId || String(dish.id)];
+                        const avgRating = dishAverageRatings[dish?.datasetId || String(dish?.id || index)];
+                        const inMealLog = isDishInMealLog ? isDishInMealLog(dishName) : false;
+                        const popularity = dishPopularity[dish?.datasetId || String(dish?.id || index)];
                         return (
                             <MenuCard
-                                key={dish.id}
+                                key={dish?.id || index}
                                 item={dish}
                                 onClick={() => onSelectDish(dish)}
                                 isLiked={isLiked}
                                 onLike={() => toggleRecommendedLike(dish)}
                                 onLocationClick={() => onLocationClick?.(dish)}
+                                onAddToMealLog={onAddToMealLog ? () => onAddToMealLog(dish) : undefined}
+                                isInMealLog={inMealLog}
+                                scanCount={popularity?.scanCount}
+                                viewCount={popularity?.viewCount}
                                 rating={userRating}
                                 averageRating={avgRating?.averageRating}
                                 totalReviews={avgRating?.totalReviews}
+                                userAllergens={userAllergens}
+                                showHealthierBadge={true}
                             />
                         );
                     })}

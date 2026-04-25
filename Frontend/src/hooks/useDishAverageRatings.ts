@@ -10,13 +10,11 @@ interface DishAverageRating {
 
 export function useDishAverageRatings(dishIds: string[]): Record<string, DishAverageRating> {
     const [ratings, setRatings] = useState<Record<string, DishAverageRating>>({});
-    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         const fetchRatings = async () => {
             if (dishIds.length === 0) return;
             
-            setLoading(true);
             const newRatings: Record<string, DishAverageRating> = {};
 
             try {
@@ -42,8 +40,6 @@ export function useDishAverageRatings(dishIds: string[]): Record<string, DishAve
                 setRatings(newRatings);
             } catch (err) {
                 console.error('Error fetching dish ratings:', err);
-            } finally {
-                setLoading(false);
             }
         };
 

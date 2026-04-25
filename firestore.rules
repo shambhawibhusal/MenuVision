@@ -33,7 +33,6 @@ service cloud.firestore {
         // Users can delete their own review
         allow delete: if request.auth != null && request.auth.uid == reviewId;
       }
-      }
     }
 
     // Menu Dataset collection - readable by all authenticated users, writable for new entries
@@ -41,6 +40,13 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
       allow update: if request.auth != null;
+    }
+
+    // Meal Logs collection - users can only access their own logs
+    // Document IDs are formatted as: {userId}_{date}
+    match /mealLogs/{mealLogId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
   }
 }

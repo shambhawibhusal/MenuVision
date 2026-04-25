@@ -178,4 +178,16 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .overscroll-contain {
+    overscroll-behavior: contain;
+  }
+
+  .webkit-overflow-scrolling-touch {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .touch-pan-y {
+    touch-action: pan-y;
+  }
 }
