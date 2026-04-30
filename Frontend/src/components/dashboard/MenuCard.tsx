@@ -118,7 +118,7 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                     </p>
                 </div>
 
-                <div className="p-5 pt-0 sm:pt-5 sm:pl-2 min-w-[30%] flex flex-row sm:flex-col justify-between sm:justify-center items-center sm:items-end gap-3 border-t sm:border-t-0 sm:border-l border-gray-100 bg-gray-50/50 sm:bg-transparent">
+                <div className="p-5 pt-0 sm:pt-5 sm:pl-2 min-w-[30%] flex flex-col items-start sm:items-end gap-3 border-t sm:border-t-0 sm:border-l border-gray-100 bg-gray-50/50 sm:bg-transparent">
                     <span className="text-amber-600 font-bold text-lg whitespace-nowrap bg-amber-50 px-3 py-1 rounded-full border border-amber-200 shadow-sm">
                         {normalizePrice(item.price)}
                     </span>
@@ -139,22 +139,15 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                         )}
                     </div>
 
-                    {onAddToMealLog && (
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className={`h-10 w-10 rounded-full transition-colors ${isInMealLog ? 'bg-green-100 hover:bg-green-200 text-green-600' : 'hover:bg-gray-100 text-gray-400 hover:text-amber-500'}`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onAddToMealLog();
-                            }}
-                            title={isInMealLog ? 'Added to meal log' : 'Add to meal log'}
-                        >
-                            {isInMealLog ? <Check size={20} /> : <UtensilsCrossed size={20} />}
-                        </Button>
-                    )}
-
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap items-center">
+                        {onAddToMealLog && (
+                            <button
+                                className={`text-xs px-2 py-1 rounded-full border transition-colors ${isInMealLog ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-amber-100 hover:text-amber-700 hover:border-amber-200'}`}
+                                onClick={(e) => { e.stopPropagation(); onAddToMealLog(); }}
+                            >
+                                {isInMealLog ? <><Check size={12} className="inline mr-1" />Added</> : <><UtensilsCrossed size={12} className="inline mr-1" />Add</>}
+                            </button>
+                        )}
                         {showHealthierBadge && (item.isVegetarian || item.isVegan || item.isGlutenFree) && (
                             <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
                                 <Leaf size={12} /> Healthier Choice
