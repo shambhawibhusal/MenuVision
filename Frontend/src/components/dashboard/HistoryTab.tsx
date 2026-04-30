@@ -19,7 +19,14 @@ interface HistoryTabProps {
 }
 
 const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite, dishRatings = {} }) => {
+    const [sortBy, setSortBy] = useState<'latest' | 'oldest'>('latest');
     const [resolvedFavorites, setResolvedFavorites] = useState<Dish[]>([]);
+
+    const sortedHistoryItems = [...historyItems].sort((a, b) => {
+        return sortBy === 'latest'
+            ? b.date.localeCompare(a.date)
+            : a.date.localeCompare(b.date);
+    });
 
     const dishIds = resolvedFavorites.map((dish, index) => dish.datasetId || String(dish.id || index)).filter(Boolean);
     const dishAverageRatings = useDishAverageRatings(dishIds);
@@ -43,10 +50,26 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                 </TabsList>
 
                 <TabsContent value="history" className="space-y-4">
-                    {historyItems.length === 0 ? (
+                    <div className="flex gap-2 mb-4">
+                        <Button
+                            variant={sortBy === 'latest' ? 'default' : 'outline'}
+                            onClick={() => setSortBy('latest')}
+                            className="flex-1"
+                        >
+                            Latest
+                        </Button>
+                        <Button
+                            variant={sortBy === 'oldest' ? 'default' : 'outline'}
+                            onClick={() => setSortBy('oldest')}
+                            className="flex-1"
+                        >
+                            Oldest
+                        </Button>
+                    </div>
+                    {sortedHistoryItems.length === 0 ? (
                         <div className="text-center py-20 text-gray-400">No history yet.</div>
                     ) : (
-                        historyItems.map(item => (
+                        sortedHistoryItems.map(item => (
                             <Card
                                 key={item.id}
                                 className="bg-white border border-gray-100 text-gray-900 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden relative rounded-2xl"
