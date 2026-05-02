@@ -57,7 +57,20 @@ export interface DishRating {
     userName?: string;
     rating: number;
     comment?: string;
-    createdAt: string;
+    createdAt: string | any;
+}
+
+export interface DishReview extends DishRating {
+    id: string;
+    dishId: string;
+}
+
+export interface NewReview {
+    dishId: string;
+    userId: string;
+    userName?: string;
+    rating: number;
+    comment?: string;
 }
 
 export interface Dish extends ScannedItem {

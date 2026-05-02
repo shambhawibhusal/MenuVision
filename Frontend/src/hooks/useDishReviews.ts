@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/firebase';
-import { DishRating } from '@/types/dashboard';
-
-interface DishReview extends DishRating {
-    id: string;
-}
+import { DishReview } from '@/types/dashboard';
 
 interface UseDishReviewsResult {
     reviews: DishReview[];
@@ -29,8 +25,12 @@ export function useDishReviews(dishId: string | null): UseDishReviewsResult {
         }
 
         setLoading(true);
-        const reviewsRef = collection(db, 'dishes', dishId, 'reviews');
-        const q = query(reviewsRef, orderBy('createdAt', 'desc'));
+        const reviewsRef = collection(db, 'reviews');
+        const q = query(
+            reviewsRef,
+            where('dishId', '==', dishId),
+            orderBy('createdAt', 'desc')
+        );
 
         const unsubscribe = onSnapshot(
             q,
@@ -39,6 +39,7 @@ export function useDishReviews(dishId: string | null): UseDishReviewsResult {
                     const data = doc.data();
                     return {
                         id: doc.id,
+                        dishId: data.dishId,
                         userId: data.userId,
                         userName: data.userName || 'Anonymous',
                         rating: data.rating,

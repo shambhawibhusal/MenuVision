@@ -22,3 +22,27 @@ export const formatPrepTime = (prepTime: string | number | undefined): string =>
 
     return `${hours}hour ${minutes}min`;
 };
+
+export const formatDate = (dateValue: string | Date | { toDate: () => Date } | undefined): string => {
+    if (!dateValue) return '';
+    
+    try {
+        let date: Date;
+        
+        if (typeof dateValue === 'string') {
+            date = new Date(dateValue);
+        } else if (dateValue instanceof Date) {
+            date = dateValue;
+        } else if (typeof dateValue === 'object' && 'toDate' in dateValue) {
+            date = dateValue.toDate();
+        } else {
+            date = new Date(dateValue);
+        }
+        
+        if (isNaN(date.getTime())) return '';
+        
+        return date.toLocaleDateString();
+    } catch {
+        return '';
+    }
+};

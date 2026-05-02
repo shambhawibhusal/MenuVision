@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { ChatMessage } from '@/types/dashboard';
 import { auth, db } from '../firebase';
-import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { containerStyle } from '../utils/styles';
 import { useTouchScroll } from '@/hooks/useTouchScroll';
@@ -32,7 +32,7 @@ import { useDishPopularity } from '@/hooks/useDishPopularity';
 import { useToast, ToastContainer } from '@/hooks/useToast';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
-import { formatPrepTime } from '../utils/formatters';
+import { formatPrepTime, formatDate } from '../utils/formatters';
 import { checkDishInDataset, addDishToDataset, incrementScanCount, getDishById, resolveScannedItems } from '../services/menuDataset';
 
 // Components
@@ -236,23 +236,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const saveRating = async (dishName: string, rating: number, comment?: string) => {
         if (!auth.currentUser || rating === 0 || !currentDishFirestoreId) return;
 
-        const reviewRef = doc(db, 'dishes', currentDishFirestoreId, 'reviews', auth.currentUser.uid);
-
-        const reviewData: DishRating = {
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || 'Anonymous',
-            rating,
-            comment: comment || '',
-            createdAt: new Date().toISOString()
-        };
-
         try {
-            await setDoc(reviewRef, reviewData);
+            await addDoc(collection(db, 'reviews'), {
+                dishId: currentDishFirestoreId,
+                userId: auth.currentUser.uid,
+                userName: auth.currentUser.displayName || 'Anonymous',
+                rating,
+                comment: comment || '',
+                createdAt: serverTimestamp()
+            });
 
             const ratingKey = `dish_${dishName.toLowerCase().trim()}`;
+            const localReviewData: DishRating = {
+                userId: auth.currentUser.uid,
+                userName: auth.currentUser.displayName || 'Anonymous',
+                rating,
+                comment: comment || '',
+                createdAt: new Date().toISOString()
+            };
             const newDishRatings = {
                 ...dishRatings,
-                [ratingKey]: reviewData
+                [ratingKey]: localReviewData
             };
             
             setDishRatings(newDishRatings);
@@ -1565,7 +1569,7 @@ const newDishId = await addDishToDataset({
                                         <div key={review.id} className="bg-green-50 border border-green-200 rounded-xl p-4">
                                             <div className="flex items-center justify-between mb-1">
                                                 <span className="text-sm font-semibold text-green-700">Your review</span>
-                                                <span className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
+                                                <span className="text-xs text-gray-400">{formatDate(review.createdAt)}</span>
                                             </div>
                                             <StarRating rating={review.rating} readonly size={16} />
                                             {review.comment && (
@@ -1615,7 +1619,7 @@ const newDishId = await addDishToDataset({
                                                     <div key={review.id} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
                                                         <div className="flex items-center justify-between mb-1">
                                                             <span className="text-sm font-semibold text-gray-700">{review.userName}</span>
-                                                            <span className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
+                                                            <span className="text-xs text-gray-400">{formatDate(review.createdAt)}</span>
                                                         </div>
                                                         <StarRating rating={review.rating} readonly size={14} />
                                                         {review.comment && (
