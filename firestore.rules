@@ -60,5 +60,23 @@ service cloud.firestore {
       allow update, delete: if request.auth != null 
                             && request.auth.uid == request.resource.data.userId;
     }
+
+    // Restaurants collection
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+
+      // Restaurant reviews subcollection
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow create: if request.auth != null 
+                      && request.resource.data.userId == request.auth.uid
+                      && request.resource.data.rating is number
+                      && request.resource.data.rating >= 1
+                      && request.resource.data.rating <= 5;
+        allow update, delete: if request.auth != null 
+                              && request.auth.uid == request.resource.data.userId;
+      }
+    }
   }
 }

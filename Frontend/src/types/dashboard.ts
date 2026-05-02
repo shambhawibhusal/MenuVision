@@ -73,6 +73,34 @@ export interface NewReview {
     comment?: string;
 }
 
+export interface Restaurant {
+    id?: string;
+    name: string;
+    location: string;
+    firstScanned?: string;
+    lastScanned?: string;
+    totalScans?: number;
+    averageRating?: number;
+    totalReviews?: number;
+}
+
+export interface RestaurantReview {
+    id: string;
+    userId: string;
+    userName: string;
+    rating: number;
+    comment?: string;
+    createdAt: string | any;
+}
+
+export interface NewRestaurantReview {
+    restaurantId: string;
+    userId: string;
+    userName?: string;
+    rating: number;
+    comment?: string;
+}
+
 export interface Dish extends ScannedItem {
     id: number;
     datasetId?: string;

@@ -29,11 +29,14 @@ import { useDishReviews } from '@/hooks/useDishReviews';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 import { useMealLog } from '@/hooks/useMealLog';
 import { useDishPopularity } from '@/hooks/useDishPopularity';
+import { useRestaurantReviews } from '@/hooks/useRestaurantReviews';
 import { useToast, ToastContainer } from '@/hooks/useToast';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
 import { searchDishes } from '../utils/search';
 import { formatPrepTime, formatDate } from '../utils/formatters';
 import { checkDishInDataset, addDishToDataset, incrementScanCount, getDishById, resolveScannedItems } from '../services/menuDataset';
+import { incrementRestaurantScanCount } from '../services/restaurants';
+import { addRestaurantReview } from '../services/restaurants';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -83,12 +86,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [feedbackComment, setFeedbackComment] = useState('');
     const [userRating, setUserRating] = useState(0);
     const [currentDishFirestoreId, setCurrentDishFirestoreId] = useState<string | null>(null);
+
+    const [showRestaurantRatingModal, setShowRestaurantRatingModal] = useState(false);
+    const [selectedRestaurantForRating, setSelectedRestaurantForRating] = useState<{ place: string; location: string } | null>(null);
+    const [restaurantRating, setRestaurantRating] = useState(0);
+    const [restaurantComment, setRestaurantComment] = useState('');
+    const [isSavingRestaurantReview, setIsSavingRestaurantReview] = useState(false);
+    const [selectedHistoryRestaurant, setSelectedHistoryRestaurant] = useState<{ place: string; location: string } | null>(null);
+
+    const [showRestaurantReviewsModal, setShowRestaurantReviewsModal] = useState(false);
     const [resolvedRecommendedDishes, setResolvedRecommendedDishes] = useState<Dish[]>([]);
     const [resolvedSearchableDishes, setResolvedSearchableDishes] = useState<Dish[]>([]);
     const [selectedLocationDish, setSelectedLocationDish] = useState<Dish | null>(null);
     const [selectedMealType, setSelectedMealType] = useState<MealType>('lunch');
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
+    
     const { addToLog, isInLog: isDishInMealLog, todayLog } = useMealLog();
     const { toasts, showToast, removeToast } = useToast();
     const { containerRef } = useTouchScroll({ enabled: true, speed: 1 });
@@ -271,11 +284,48 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
+    const saveRestaurantReview = async () => {
+        if (!auth.currentUser || !selectedRestaurantForRating || restaurantRating === 0) return;
+
+        setIsSavingRestaurantReview(true);
+
+        const restaurantId = `${selectedRestaurantForRating.place}_${selectedRestaurantForRating.location}`;
+
+        const success = await addRestaurantReview({
+            restaurantId,
+            userId: auth.currentUser.uid,
+            userName: auth.currentUser.displayName || 'Anonymous',
+            rating: restaurantRating,
+            comment: restaurantComment
+        });
+
+        if (success) {
+            setShowRestaurantRatingModal(false);
+            setRestaurantRating(0);
+            setRestaurantComment('');
+            setSelectedRestaurantForRating(null);
+            showToast('Restaurant rated successfully!', 'success');
+        } else {
+            showToast('Failed to save review', 'error');
+        }
+
+        setIsSavingRestaurantReview(false);
+    };
+
     // -- Data States
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
     const [fullText, setFullText] = useState('');
     const [viewMode, setViewMode] = useState<'items' | 'text'>('items');
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
+    const restaurantIdForModal = selectedDish?.place && selectedDish.place !== 'Scanned Menu' 
+        ? `${selectedDish.place}_${selectedDish.location || ''}` 
+        : '';
+    const restaurantData = useRestaurantReviews(restaurantIdForModal || null);
+    const restaurantReviews = restaurantData?.reviews ?? [];
+    const restaurantAvgRating = restaurantData?.averageRating ?? 0;
+    const restaurantTotalReviews = restaurantData?.totalReviews ?? 0;
+    const restaurantReviewsLoading = restaurantData?.loading ?? false;
+    
     const [previewImage, setPreviewImage] = useState<{ url: string; alt: string } | null>(null);
 
     useEffect(() => {
@@ -845,6 +895,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 // Persist to Firestore
                 if (auth.currentUser) {
                     const userDocRef = doc(db, 'users', auth.currentUser.uid);
+                    
+                    // Increment restaurant scan count
+                    if (restaurantName) {
+                        const restaurantId = `${restaurantName}_${restaurantLocation || ''}`;
+                        await incrementRestaurantScanCount(restaurantId);
+                    }
+                    
                     await updateDoc(userDocRef, {
                         history: arrayUnion(newHistoryItem)
                     }).catch(async (error) => {
@@ -1173,6 +1230,12 @@ const newDishId = await addDishToDataset({
                                 }
                             }}
                             isDishInMealLog={isDishInMealLog}
+                            restaurantPlace={selectedHistoryRestaurant?.place}
+                            restaurantLocation={selectedHistoryRestaurant?.location}
+                            onRateRestaurant={(place, location) => {
+                                setSelectedRestaurantForRating({ place, location });
+                                setShowRestaurantRatingModal(true);
+                            }}
                         />
                     )}
                     {activeTab === 'chat' && (
@@ -1206,6 +1269,7 @@ const newDishId = await addDishToDataset({
                                     setActiveTab('results');
                                     setViewMode('items');
                                     setFullText("");
+                                    setSelectedHistoryRestaurant({ place: item.place, location: item.location || '' });
                                 } else {
                                     alert("No detailed items found for this scan.");
                                 }
@@ -1430,16 +1494,31 @@ const newDishId = await addDishToDataset({
                             </div>
                             <div className="text-green-600 text-xl font-bold mb-2">{selectedDish?.price}</div>
                             {selectedDish?.place && (
-                                <button
-                                    className="text-sm text-gray-500 flex items-center gap-1 mb-6 hover:text-amber-600 transition-colors"
-                                    onClick={() => setSelectedLocationDish(selectedDish as Dish)}
-                                    disabled={!selectedDish?.latitude || !selectedDish?.longitude}
-                                >
-                                    <MapPin size={14} /> {selectedDish.place}{selectedDish.location ? `, ${selectedDish.location}` : ''}
-                                    {selectedDish?.latitude && selectedDish?.longitude && (
-                                        <span className="ml-1 text-xs text-amber-500">(View Map)</span>
-                                    )}
-                                </button>
+                                <div className="mb-4">
+                                    <div className="text-sm text-gray-500 flex items-center gap-1 mb-2">
+                                        <MapPin size={14} /> {selectedDish.place}{selectedDish.location ? `, ${selectedDish.location}` : ''}
+                                        {selectedDish?.latitude && selectedDish?.longitude && (
+                                            <button
+                                                onClick={() => setSelectedLocationDish(selectedDish as Dish)}
+                                                className="ml-1 text-xs text-amber-500 hover:text-amber-600"
+                                            >
+                                                (View Map)
+                                            </button>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            if (selectedDish?.place) {
+                                                const restaurantId = `${selectedDish.place}_${selectedDish.location || ''}`;
+                                                setSelectedRestaurantForRating({ place: selectedDish.place, location: selectedDish.location || '' });
+                                                setShowRestaurantReviewsModal(true);
+                                            }
+                                        }}
+                                        className="text-sm text-amber-600 hover:text-amber-700 font-medium underline"
+                                    >
+                                        About Restaurant
+                                    </button>
+                                </div>
                             )}
 
                             <div className="space-y-6">
@@ -1759,6 +1838,132 @@ const newDishId = await addDishToDataset({
                         </div>
                     </div>
                 )}
+
+                <Dialog open={showRestaurantRatingModal} onOpenChange={setShowRestaurantRatingModal}>
+                    <DialogContent className="sm:max-w-md rounded-3xl p-6 border-none">
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-bold">Rate Restaurant Experience</DialogTitle>
+                            <DialogDescription>
+                                How was your experience at {selectedRestaurantForRating?.place}?
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="py-4">
+                            <Label className="text-sm font-semibold text-gray-700 mb-2 block">Your Rating</Label>
+                            <div className="flex items-center gap-1">
+                                <StarRating 
+                                    rating={restaurantRating} 
+                                    readonly={false} 
+                                    size={32}
+                                    onRatingChange={(rating) => setRestaurantRating(Math.round(rating))}
+                                />
+                            </div>
+                            {restaurantRating > 0 && (
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {restaurantRating === 1 && "Poor"}
+                                    {restaurantRating === 2 && "Fair"}
+                                    {restaurantRating === 3 && "Good"}
+                                    {restaurantRating === 4 && "Very Good"}
+                                    {restaurantRating === 5 && "Excellent"}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="py-2">
+                            <Label className="text-sm font-semibold text-gray-700 mb-2 block">Comment (optional)</Label>
+                            <Input
+                                placeholder="Share your experience..."
+                                value={restaurantComment}
+                                onChange={(e) => setRestaurantComment(e.target.value)}
+                                className="rounded-xl"
+                            />
+                        </div>
+
+                        <DialogFooter className="flex sm:flex-row gap-2">
+                            <Button 
+                                variant="outline" 
+                                onClick={() => {
+                                    setShowRestaurantRatingModal(false);
+                                    setRestaurantRating(0);
+                                    setRestaurantComment('');
+                                    setSelectedRestaurantForRating(null);
+                                }} 
+                                disabled={isSavingRestaurantReview} 
+                                className="flex-1 h-12 rounded-xl border-gray-200 font-bold"
+                            >
+                                Cancel
+                            </Button>
+                            <Button 
+                                onClick={saveRestaurantReview}
+                                disabled={restaurantRating === 0 || isSavingRestaurantReview}
+                                className="flex-1 h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-black font-bold"
+                            >
+                                {isSavingRestaurantReview ? 'Saving...' : 'Submit'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={showRestaurantReviewsModal} onOpenChange={setShowRestaurantReviewsModal}>
+                    <DialogContent className="sm:max-w-lg rounded-3xl p-6 border-none max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-bold">{selectedDish?.place}</DialogTitle>
+                            <DialogDescription className="flex items-center gap-2">
+                                {restaurantTotalReviews > 0 ? (
+                                    <>
+                                        <StarRating rating={restaurantAvgRating} readonly size={16} />
+                                        <span className="font-medium text-gray-700">{restaurantAvgRating.toFixed(1)} ({restaurantTotalReviews} reviews)</span>
+                                    </>
+                                ) : (
+                                    <span>No reviews yet</span>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="py-4 space-y-4">
+                            {restaurantReviewsLoading ? (
+                                <div className="text-center py-4 text-gray-400">Loading reviews...</div>
+                            ) : restaurantReviews.length > 0 ? (
+                                restaurantReviews.map((review) => (
+                                    <div key={review.id} className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-semibold text-gray-700">{review.userName}</span>
+                                            <StarRating rating={review.rating} readonly size={14} />
+                                        </div>
+                                        {review.comment && (
+                                            <p className="text-sm text-gray-600">{review.comment}</p>
+                                        )}
+                                        <p className="text-xs text-gray-400 mt-2">{formatDate(review.createdAt)}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-8 text-gray-400">
+                                    <p>No reviews yet.</p>
+                                    <p className="text-sm mt-2">Be the first to rate this restaurant!</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <Button
+                            onClick={() => {
+                                setShowRestaurantReviewsModal(false);
+                                setSelectedRestaurantForRating({ place: selectedDish!.place, location: selectedDish!.location || '' });
+                                setShowRestaurantRatingModal(true);
+                            }}
+                            className="w-full h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-black font-bold"
+                        >
+                            Rate This Restaurant
+                        </Button>
+
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setShowRestaurantReviewsModal(false)}
+                            className="w-full h-12 rounded-xl border-gray-200 font-bold"
+                        >
+                            Close
+                        </Button>
+                    </DialogContent>
+                </Dialog>
 
                 <ToastContainer toasts={toasts} onRemove={removeToast} />
 

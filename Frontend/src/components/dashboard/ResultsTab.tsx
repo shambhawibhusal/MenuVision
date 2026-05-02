@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Star } from 'lucide-react';
 import { ScannedItem, Tab, Dish, DishRating } from '@/types/dashboard';
 import { resolveScannedItems } from '@/services/menuDataset';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
@@ -21,6 +22,9 @@ interface ResultsTabProps {
     userAllergens?: string[];
     onAddToMealLog?: (item: ScannedItem) => void;
     isDishInMealLog?: (dishName: string) => boolean;
+    restaurantPlace?: string;
+    restaurantLocation?: string;
+    onRateRestaurant?: (place: string, location: string) => void;
 }
 
 import MenuCard from './MenuCard';
@@ -38,7 +42,10 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     onLocationClick,
     userAllergens = [],
     onAddToMealLog,
-    isDishInMealLog
+    isDishInMealLog,
+    restaurantPlace,
+    restaurantLocation,
+    onRateRestaurant
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
 
@@ -99,7 +106,16 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     </Card>
                 </TabsContent>
             </Tabs>
-            <Button onClick={() => setActiveTab('home')} className="mt-auto mb-4 bg-amber-400 text-black hover:bg-amber-500 font-bold h-12 rounded-xl">
+            {restaurantPlace && onRateRestaurant && (
+                <Button 
+                    onClick={() => onRateRestaurant(restaurantPlace, restaurantLocation || '')}
+                    className="mt-auto mb-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold h-12 rounded-xl"
+                >
+                    <Star className="w-5 h-5 mr-2" />
+                    Rate This Restaurant
+                </Button>
+            )}
+            <Button onClick={() => setActiveTab('home')} className="mb-4 bg-amber-400 text-black hover:bg-amber-500 font-bold h-12 rounded-xl">
                 Scan Another
             </Button>
         </div>

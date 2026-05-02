@@ -7,6 +7,16 @@ import { Button } from '@/components/ui/button';
 import MenuCard from './MenuCard';
 import { resolveScannedItems } from '@/services/menuDataset';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface HistoryTabProps {
     historyItems: HistoryItem[];
@@ -44,7 +54,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
             <h2 className="text-3xl font-bold text-gray-900 mb-8">My Activity</h2>
 
             <Tabs defaultValue="history" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200 h-12 p-1 mb-8 rounded-xl">
+                <TabsList className="grid w-full grid-cols-2 bg-gray-100 border border-gray-200 h-12 p-1 mb-4 rounded-xl">
                     <TabsTrigger value="history" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm text-gray-500 font-medium transition-all">Scan History</TabsTrigger>
                     <TabsTrigger value="favorites" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm text-gray-500 font-medium transition-all">Favorite Dishes</TabsTrigger>
                 </TabsList>
