@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { auth } from '@/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { MealLogEntry, DailyMealLog, MealType } from '@/types/dashboard';
 import {
     addDishToMealLog,
@@ -36,7 +37,16 @@ export function useMealLog(): UseMealLogReturn {
     }, []);
 
     useEffect(() => {
-        fetchTodayLog();
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            if (user) {
+                fetchTodayLog();
+            } else {
+                setTodayLog(null);
+                setLoading(false);
+            }
+        });
+
+        return () => unsubscribe();
     }, [fetchTodayLog]);
 
     const addToLog = useCallback(async (dish: ScannedItem, mealType: MealType): Promise<boolean> => {
