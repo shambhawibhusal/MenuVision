@@ -33,9 +33,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
     const [resolvedFavorites, setResolvedFavorites] = useState<Dish[]>([]);
 
     const sortedHistoryItems = [...historyItems].sort((a, b) => {
+        const dateA = a.sortDate || a.date || '';
+        const dateB = b.sortDate || b.date || '';
         return sortBy === 'latest'
-            ? b.date.localeCompare(a.date)
-            : a.date.localeCompare(b.date);
+            ? dateB.localeCompare(dateA)
+            : dateA.localeCompare(dateB);
     });
 
     const dishIds = resolvedFavorites.map((dish, index) => dish.datasetId || String(dish.id || index)).filter(Boolean);

@@ -9,7 +9,11 @@ export const addDishToMealLog = async (
     entry: Omit<MealLogEntry, 'addedAt'>
 ): Promise<boolean> => {
     try {
-        const dateStr = new Date().toISOString().split('T')[0];
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
         const docId = generateMealLogId(userId, dateStr);
         const docRef = doc(db, 'mealLogs', docId);
 
@@ -151,7 +155,11 @@ export const formatDateForDisplay = (dateStr: string): string => {
 };
 
 export const getTodayDateString = (): string => {
-    return new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 };
 
 export const getMealTypeLabel = (mealType: MealType): string => {

@@ -119,6 +119,7 @@ export interface HistoryItem {
     place: string;
     location?: string;
     date: string;
+    sortDate: string;
     items: string;
     total: string;
     scannedItems?: ScannedItem[];

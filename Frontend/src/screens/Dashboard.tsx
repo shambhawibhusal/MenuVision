@@ -121,7 +121,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 if (userDoc.exists()) {
                     const data = userDoc.data();
                     setFavoriteItems(data.favorites || []);
-                    setHistoryItems(data.history || []);
+                    
+                    // Migrate old history items to add sortDate
+                    const history = (data.history || []).map((item: HistoryItem) => {
+                        if (!item.sortDate) {
+                            // Parse display date "03 May 2026" to "2026-05-03"
+                            const parts = item.date?.match(/(\d{2})\s+(\w+)\s+(\d{4})/);
+                            if (parts) {
+                                const months: Record<string, string> = {
+                                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                                    'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                                    'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                                };
+                                const day = parts[1];
+                                const month = months[parts[2]] || '01';
+                                const year = parts[3];
+                                return { ...item, sortDate: `${year}-${month}-${day}` };
+                            }
+                        }
+                        return item;
+                    });
+                    setHistoryItems(history);
                     setPhoneNumber(data.phoneNumber || '');
                     setUnlikedDishIds(data.unliked || []);
                     setFoodProfile(data.foodProfile || DEFAULT_FOOD_PROFILE);
@@ -880,11 +900,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     )
                 ) as ScannedItem[];
                 
-                const newHistoryItem: HistoryItem = {
+                const now = new Date();
+                    const sortDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    
+                    const newHistoryItem: HistoryItem = {
                     id: Date.now(),
                     place: restaurantName || 'Scanned Menu',
                     location: restaurantLocation || '',
                     date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                    sortDate: sortDateStr,
                     items: items.slice(0, 2).map(i => i.name).join(', ') + (items.length > 2 ? '...' : ''),
                     total: `${items.length} dishes found`,
                     scannedItems: sanitizedItems
