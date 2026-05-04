@@ -32,7 +32,7 @@ import { useDishPopularity } from '@/hooks/useDishPopularity';
 import { useRestaurantReviews } from '@/hooks/useRestaurantReviews';
 import { useToast, ToastContainer } from '@/hooks/useToast';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
-import { searchDishes, groupDishesByName } from '../utils/search';
+import { searchDishes, groupDishesByName, groupDishesByRestaurant } from '../utils/search';
 import { formatPrepTime, formatDate } from '../utils/formatters';
 import { checkDishInDataset, addDishToDataset, incrementScanCount, getDishById, resolveScannedItems } from '../services/menuDataset';
 import { incrementRestaurantScanCount } from '../services/restaurants';
@@ -742,6 +742,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const groupedDishes = useMemo(() => {
         if (!debouncedSearch.trim() && filteredDishes.length === 0) return [];
         const dishesToGroup = debouncedSearch.trim() ? filteredDishes : searchableDishes;
+        
+        if (debouncedSearch.trim()) {
+            const places = new Set(dishesToGroup.map(d => d.place?.toLowerCase().trim()).filter(Boolean));
+            const hasMultipleDishesFromSamePlace = dishesToGroup.length > 1 && places.size < dishesToGroup.length;
+            
+            if (hasMultipleDishesFromSamePlace) {
+                return groupDishesByRestaurant(dishesToGroup as Dish[]);
+            }
+        }
+        
         return groupDishesByName(dishesToGroup as Dish[]);
     }, [filteredDishes, searchableDishes, debouncedSearch]);
 

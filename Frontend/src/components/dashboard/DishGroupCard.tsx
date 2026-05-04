@@ -33,8 +33,9 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
     });
 
     return (
-        <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden">
-            <div className="p-4">
+        <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden relative rounded-2xl">
+            <div className="w-1.5 h-full bg-amber-400 absolute left-0 top-0 rounded-l-2xl" />
+            <div className="p-4 pl-6">
                 <div 
                     className="flex items-start justify-between cursor-pointer"
                     onClick={() => setExpanded(!expanded)}
@@ -49,9 +50,11 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
                                 {group.priceRange}
                             </span>
                             
-                            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-full font-medium">
-                                {group.restaurantCount} restaurant{group.restaurantCount !== 1 ? 's' : ''}
-                            </span>
+                            {group.primaryDish.cuisine && (
+                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                                    {group.primaryDish.cuisine}
+                                </span>
+                            )}
 
                             {group.primaryDish.averageRating && group.primaryDish.averageRating > 0 && (
                                 <div className="flex items-center gap-1">
@@ -60,12 +63,6 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
                                         {group.primaryDish.averageRating.toFixed(1)}
                                     </span>
                                 </div>
-                            )}
-
-                            {group.primaryDish.cuisine && (
-                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                                    {group.primaryDish.cuisine}
-                                </span>
                             )}
                         </div>
                     </div>
@@ -92,6 +89,7 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
                         {sortedRestaurants.map((dish, idx) => {
                             const dishName = dish.name || '';
                             const liked = isLiked(dishName);
+                            const isGroupByRestaurant = group.name?.toLowerCase() === dish.place?.toLowerCase();
 
                             return (
                                 <div
@@ -102,7 +100,7 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <span className="font-medium text-gray-900 truncate">
-                                                {dish.place}
+                                                {isGroupByRestaurant ? dishName : dish.place}
                                             </span>
                                             {dish.location && (
                                                 <span className="text-xs text-gray-500 truncate">

@@ -83,12 +83,12 @@ function getRelevanceScore(dish: Dish, terms: string[]): number {
     const tags = (dish.tags || []).map(t => t.toLowerCase()).join(' ');
 
     for (const term of terms) {
-        if (name.includes(term)) {
-            score += name.startsWith(term) ? 10 : 6;
+        if (place.includes(term)) {
+            score += place.startsWith(term) ? 10 : 7;
+        } else if (name.includes(term)) {
+            score += name.startsWith(term) ? 9 : 5;
         } else if (cuisine.includes(term)) {
             score += 4;
-        } else if (place.includes(term)) {
-            score += 3;
         } else if (category.includes(term)) {
             score += 3;
         } else if (tags.includes(term)) {
@@ -143,4 +143,54 @@ export function clearRecentSearches(): void {
     } catch {
         // ignore
     }
+}
+
+export function groupDishesByRestaurant(dishes: Dish[]): DishGroup[] {
+    const groups = new Map<string, Dish[]>();
+
+    dishes.forEach(dish => {
+        const placeKey = (dish.place || '').toLowerCase().trim();
+        if (!placeKey) return;
+
+        if (!groups.has(placeKey)) {
+            groups.set(placeKey, []);
+        }
+        groups.get(placeKey)!.push(dish);
+    });
+
+    return Array.from(groups.entries()).map(([placeKey, restaurantDishes]) => {
+        const sortedByRating = [...restaurantDishes].sort((a, b) => {
+            const ratingA = a.averageRating || 0;
+            const ratingB = b.averageRating || 0;
+            return ratingB - ratingA;
+        });
+
+        const primaryDish = sortedByRating[0];
+
+        const prices = restaurantDishes
+            .map(d => parsePrice(d.price))
+            .filter(p => p > 0)
+            .sort((a, b) => a - b);
+
+        const lowestPrice = prices.length > 0 ? prices[0] : 0;
+        const highestPrice = prices.length > 0 ? prices[prices.length - 1] : 0;
+
+        const formatPrice = (p: number) => p > 0 ? `Rs. ${p}` : '';
+
+        return {
+            name: primaryDish.place || placeKey,
+            restaurants: restaurantDishes,
+            primaryDish,
+            restaurantCount: restaurantDishes.length,
+            priceRange: lowestPrice > 0 && highestPrice > 0 && lowestPrice !== highestPrice
+                ? `${formatPrice(lowestPrice)} - ${formatPrice(highestPrice)}`
+                : formatPrice(lowestPrice),
+            lowestPrice: formatPrice(lowestPrice),
+            highestPrice: formatPrice(highestPrice),
+        };
+    }).sort((a, b) => {
+        const ratingA = a.primaryDish.averageRating || 0;
+        const ratingB = b.primaryDish.averageRating || 0;
+        return ratingB - ratingA;
+    });
 }
