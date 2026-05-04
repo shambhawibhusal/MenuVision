@@ -3,8 +3,9 @@ import { Search, Camera, Leaf, X, SlidersHorizontal, MapPin, Loader2, Star, Arro
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dish, DishRating, MealLogEntry } from '@/types/dashboard';
+import { Dish, DishRating, DishGroup, MealLogEntry } from '@/types/dashboard';
 import MenuCard from './MenuCard';
+import DishGroupCard from './DishGroupCard';
 import { getSuggestions, getRecentSearches, addRecentSearch, clearRecentSearches } from '@/utils/search';
 import { normalizePrice } from '@/utils/recommendations';
 
@@ -25,6 +26,7 @@ interface HomeTabProps {
     setSearchText: (val: string) => void;
     setShowScanOptions: (val: boolean) => void;
     filteredDishes: Dish[];
+    groupedDishes: DishGroup[];
     favoriteItems: Dish[];
     toggleRecommendedLike: (dish: Dish) => void;
     onSelectDish: (dish: Dish) => void;
@@ -76,6 +78,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     setSearchText,
     setShowScanOptions,
     filteredDishes,
+    groupedDishes,
     favoriteItems,
     toggleRecommendedLike,
     onSelectDish,
@@ -488,7 +491,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
             {searchText && (
                 <div className="mb-4 px-1 flex items-center justify-between">
                     <span className="text-sm text-gray-500">
-                        {filteredDishes.length} result{filteredDishes.length !== 1 ? 's' : ''} found
+                        {searchText.trim() && groupedDishes.length > 0
+                            ? `${groupedDishes.length} dish${groupedDishes.length !== 1 ? 'es' : ''} found`
+                            : `${filteredDishes.length} result${filteredDishes.length !== 1 ? 's' : ''} found`
+                        }
                     </span>
                     {sortBy !== 'relevance' && (
                         <span className="text-xs text-amber-600 font-medium">
@@ -545,10 +551,27 @@ const HomeTab: React.FC<HomeTabProps> = ({
             )}
 
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-gray-900 text-xl font-bold px-1">Recommended for You</h3>
+                <h3 className="text-gray-900 text-xl font-bold px-1">
+                    {searchText.trim() ? 'Search Results' : 'Recommended for You'}
+                </h3>
             </div>
 
-            {filteredDishes.length > 0 ? (
+            {searchText.trim() && groupedDishes.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                    {groupedDishes.map((group) => (
+                        <DishGroupCard
+                            key={group.name}
+                            group={group}
+                            onSelectDish={onSelectDish}
+                            onLikeDish={toggleRecommendedLike}
+                            isLiked={(dishName) => favoriteItems.some(fav => fav.name === dishName)}
+                            dishRatings={dishRatings}
+                            onLocationClick={onLocationClick}
+                            userAllergens={userAllergens}
+                        />
+                    ))}
+                </div>
+            ) : filteredDishes.length > 0 ? (
                 <div className="flex flex-col gap-4">
                     {filteredDishes.map((dish, index) => {
                         const dishName = dish?.name || 'Unknown';

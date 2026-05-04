@@ -1,7 +1,63 @@
-import { Dish } from '@/types/dashboard';
+import { Dish, DishGroup } from '@/types/dashboard';
 
 const RECENT_SEARCHES_KEY = 'menuvision_recent_searches';
 const MAX_RECENT_SEARCHES = 8;
+
+function parsePrice(priceStr: string | undefined): number {
+    if (!priceStr) return 0;
+    const match = String(priceStr).replace(/[^\d]/g, '');
+    return parseInt(match) || 0;
+}
+
+export function groupDishesByName(dishes: Dish[]): DishGroup[] {
+    const groups = new Map<string, Dish[]>();
+
+    dishes.forEach(dish => {
+        const nameKey = (dish.name || '').toLowerCase().trim();
+        if (!nameKey) return;
+
+        if (!groups.has(nameKey)) {
+            groups.set(nameKey, []);
+        }
+        groups.get(nameKey)!.push(dish);
+    });
+
+    return Array.from(groups.entries()).map(([nameKey, restaurantDishes]) => {
+        const sortedByRating = [...restaurantDishes].sort((a, b) => {
+            const ratingA = a.averageRating || 0;
+            const ratingB = b.averageRating || 0;
+            return ratingB - ratingA;
+        });
+
+        const primaryDish = sortedByRating[0];
+
+        const prices = restaurantDishes
+            .map(d => parsePrice(d.price))
+            .filter(p => p > 0)
+            .sort((a, b) => a - b);
+
+        const lowestPrice = prices.length > 0 ? prices[0] : 0;
+        const highestPrice = prices.length > 0 ? prices[prices.length - 1] : 0;
+
+        const formatPrice = (p: number) => p > 0 ? `Rs. ${p}` : '';
+
+        return {
+            name: primaryDish.name || nameKey,
+            restaurants: restaurantDishes,
+            primaryDish,
+            restaurantCount: restaurantDishes.length,
+            priceRange: lowestPrice > 0 && highestPrice > 0 && lowestPrice !== highestPrice
+                ? `${formatPrice(lowestPrice)} - ${formatPrice(highestPrice)}`
+                : formatPrice(lowestPrice),
+            lowestPrice: formatPrice(lowestPrice),
+            highestPrice: formatPrice(highestPrice),
+        };
+    }).sort((a, b) => {
+        const ratingA = a.primaryDish.averageRating || 0;
+        const ratingB = b.primaryDish.averageRating || 0;
+        return ratingB - ratingA;
+    });
+}
 
 export function searchDishes(dishes: Dish[], query: string): Dish[] {
     if (!query.trim()) return dishes;

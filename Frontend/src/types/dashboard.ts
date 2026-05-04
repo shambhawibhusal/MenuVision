@@ -114,6 +114,16 @@ export interface Dish extends ScannedItem {
     longitude?: number;
 }
 
+export interface DishGroup {
+    name: string;
+    restaurants: Dish[];
+    primaryDish: Dish;
+    restaurantCount: number;
+    priceRange: string;
+    lowestPrice: string;
+    highestPrice: string;
+}
+
 export interface HistoryItem {
     id: number;
     place: string;

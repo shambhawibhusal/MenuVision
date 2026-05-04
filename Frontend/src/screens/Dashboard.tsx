@@ -32,7 +32,7 @@ import { useDishPopularity } from '@/hooks/useDishPopularity';
 import { useRestaurantReviews } from '@/hooks/useRestaurantReviews';
 import { useToast, ToastContainer } from '@/hooks/useToast';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
-import { searchDishes } from '../utils/search';
+import { searchDishes, groupDishesByName } from '../utils/search';
 import { formatPrepTime, formatDate } from '../utils/formatters';
 import { checkDishInDataset, addDishToDataset, incrementScanCount, getDishById, resolveScannedItems } from '../services/menuDataset';
 import { incrementRestaurantScanCount } from '../services/restaurants';
@@ -739,6 +739,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         return results;
     }, [resolvedRecommendedDishes, searchableDishes, debouncedSearch, activeFilters, dishAverageRatings, dishRatings, allDishes, sortBy]);
 
+    const groupedDishes = useMemo(() => {
+        if (!debouncedSearch.trim() && filteredDishes.length === 0) return [];
+        const dishesToGroup = debouncedSearch.trim() ? filteredDishes : searchableDishes;
+        return groupDishesByName(dishesToGroup as Dish[]);
+    }, [filteredDishes, searchableDishes, debouncedSearch]);
+
     // -- Camera Refs
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1205,6 +1211,7 @@ const newDishId = await addDishToDataset({
                             setSearchText={setSearchText}
                             setShowScanOptions={setShowScanOptions}
                             filteredDishes={filteredDishes}
+                            groupedDishes={groupedDishes}
                             favoriteItems={favoriteItems}
                             toggleRecommendedLike={toggleRecommendedLike}
                             onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)}
