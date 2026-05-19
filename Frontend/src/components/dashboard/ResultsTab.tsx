@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Star } from 'lucide-react';
 import { ScannedItem, Tab, Dish, DishRating } from '@/types/dashboard';
 import { resolveScannedItems } from '@/services/menuDataset';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 import { checkAllergens } from '@/services/allergyCheck';
+import { AlertTriangle, Star } from 'lucide-react';
 
 interface ResultsTabProps {
     viewMode: 'items' | 'text';
@@ -60,6 +60,10 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
         loadResolvedItems();
     }, [scannedItems]);
 
+    const unsafeCount = userAllergens.length > 0
+        ? resolvedItems.filter(item => !checkAllergens(item, userAllergens).isSafe).length
+        : 0;
+
     return (
         <div className="p-5 flex flex-col h-full animate-fade">
             <h2 className="text-3xl font-bold text-gray-900 mb-6">Analysis Results</h2>
@@ -68,7 +72,13 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     <TabsTrigger value="items" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm transition-all font-medium">Menu Items</TabsTrigger>
                     <TabsTrigger value="text" className="rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-sm transition-all font-medium">Full Text</TabsTrigger>
                 </TabsList>
-<TabsContent value="items" className="mt-6">
+                <TabsContent value="items" className="mt-6">
+                    {unsafeCount > 0 && (
+                        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm font-medium text-red-700">
+                            <AlertTriangle size={16} />
+                            {unsafeCount} of {resolvedItems.length} dish{resolvedItems.length !== 1 ? 'es' : ''} contain{unsafeCount === 1 ? 's' : ''} your allergens
+                        </div>
+                    )}
                     <div className="flex flex-col gap-4 pb-20">
                         {resolvedItems.length === 0 && <p className="text-gray-500 text-center py-10 w-full">No items found.</p>}
                         {resolvedItems.map((item, index) => {

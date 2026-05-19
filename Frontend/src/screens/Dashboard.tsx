@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
-import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Send } from "lucide-react";
+import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Send, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating, MealType } from '@/types/dashboard';
@@ -28,15 +28,17 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useDishReviews } from '@/hooks/useDishReviews';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 import { useMealLog } from '@/hooks/useMealLog';
+import { useNutritionGoals } from '@/hooks/useNutritionGoals';
 import { useDishPopularity } from '@/hooks/useDishPopularity';
 import { useRestaurantReviews } from '@/hooks/useRestaurantReviews';
 import { useToast, ToastContainer } from '@/hooks/useToast';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
 import { searchDishes, groupDishesByName, groupDishesByRestaurant } from '../utils/search';
 import { formatPrepTime, formatDate } from '../utils/formatters';
-import { checkDishInDataset, addDishToDataset, incrementScanCount, getDishById, resolveScannedItems } from '../services/menuDataset';
+import { checkDishInDataset, addDishToDataset, incrementScanCount, resolveScannedItems } from '../services/menuDataset';
 import { incrementRestaurantScanCount } from '../services/restaurants';
 import { addRestaurantReview } from '../services/restaurants';
+import { getHealthierAlternatives, checkAllergens, formatAllergenLabels } from '../services/allergyCheck';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -103,6 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
     
     const { addToLog, isInLog: isDishInMealLog, todayLog } = useMealLog();
+    const { goals: nutritionGoals, bodyMetrics, goalsLoading, saveGoals, saveMetrics } = useNutritionGoals();
     const { toasts, showToast, removeToast } = useToast();
     const { containerRef } = useTouchScroll({ enabled: true, speed: 1 });
 
@@ -371,6 +374,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         setFeedbackComment(existingRating?.comment || '');
     }, [selectedDish, allDishes, dishRatings]);
 
+    const healthierAlternatives = useMemo(() => {
+        if (!selectedDish || allDishes.length === 0) return [];
+        return getHealthierAlternatives(selectedDish, allDishes, foodProfile.allergens);
+    }, [selectedDish, allDishes, foodProfile.allergens]);
+
     const [searchText, setSearchText] = useState('');
     const debouncedSearch = useDebounce(searchText, 250);
     const [sortBy, setSortBy] = useState<string>('relevance');
@@ -528,6 +536,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         { id: 1, text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
     ]);
     const [chatInput, setChatInput] = useState('');
+    const [chatLoading, setChatLoading] = useState(false);
 
     const recommendedDishes = useMemo(() => {
         console.log('Computing recommendations:', {
@@ -1040,11 +1049,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const sendMessage = async () => {
         const trimmed = chatInput.trim();
-        if (!trimmed) return;
+        if (!trimmed || chatLoading) return;
 
         const userMsg: ChatMessage = { id: Date.now(), text: trimmed, sender: 'user' };
         setChatMessages(prev => [...prev, userMsg]);
         setChatInput('');
+        setChatLoading(true);
 
         try {
             const response = await fetch('/api/chat', {
@@ -1053,69 +1063,66 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 body: JSON.stringify({ message: trimmed }),
             });
             const data = await response.json();
-            
-            // Extract dish name from AI response
-            const dishName = data.data?.name || trimmed;
-            console.log(`[Chat] Processing dish: "${dishName}"`);
-            
-            let finalImageUrl: string | null = null;
-            
-            // Check dataset for the dish
-            let datasetItem = await checkDishInDataset(dishName);
-            
-            if (datasetItem) {
-                // Exists - use dataset, increment scan count
-                console.log(`[Chat] Found in dataset: ${datasetItem.id}`);
-                await incrementScanCount(datasetItem.id!);
-                finalImageUrl = datasetItem.imageUrl || null;
-            } else {
-                // New - add to dataset with GPT-generated image
-                console.log(`[Chat] Adding new dish to dataset: "${dishName}"`);
-const newDishId = await addDishToDataset({
-                    name: dishName,
-                    description: data.data?.description,
-                    ingredients: Array.isArray(data.data?.ingredients) ? data.data.ingredients : data.data?.ingredients ? [data.data?.ingredients] : undefined,
-                    allergens: data.data?.allergens,
-                    calories: data.data?.calories ? `${data.data.calories} kcal` : undefined,
-                    prepTime: data.data?.preparationTime,
-                    imageUrl: data.imageUrl || undefined,
-                    isVegan: data.data?.isVegan,
-                    isVegetarian: data.data?.isVegetarian,
-                    isGlutenFree: data.data?.isGlutenFree,
-                    origin: data.data?.origin,
-                    category: data.data?.category,
-                    nutrition: data.data?.nutrition
-                });
-                console.log(`[Chat] Added to dataset with ID: ${newDishId}`);
-                
-                // Get the full data from dataset to get the properly stored image
-                if (newDishId) {
-                    const newDatasetItem = await getDishById(newDishId);
-                    finalImageUrl = newDatasetItem?.imageUrl || null;
-                }
-            }
-            
-            const replyText = data.success && data.data
-                ? Object.entries(data.data)
-                    .map(([k, v]) => {
-                        if (k === 'nutrition' && typeof v === 'object' && v !== null) {
-                            const n = v as any;
-                            return `**nutrition**: Protein: ${n.protein ?? 0}g, Carbs: ${n.carbohydrates ?? 0}g, Fat: ${n.fat ?? 0}g, Fiber: ${n.fiber ?? 0}g, Sodium: ${n.sodium ?? 0}mg`;
-                        }
-                        return `**${k}**: ${Array.isArray(v) ? (v as string[]).join(', ') : v ?? 'N/A'}`;
-                    })
-                    .join('\n')
+
+            const replyText = data.success
+                ? data.replyText
                 : (data.error || 'Sorry, I could not get a response.');
+
+            const backendDishes: any[] = data.success ? (data.dishes || []) : [];
+
+            const scannedDishes: ScannedItem[] = await Promise.all(
+                backendDishes.map(async (dish: any) => {
+                    const datasetItem = await checkDishInDataset(dish.name);
+                    if (datasetItem) {
+                        await incrementScanCount(datasetItem.id!);
+                    } else {
+                        await addDishToDataset({
+                            name: dish.name,
+                            description: dish.description,
+                            ingredients: Array.isArray(dish.ingredients) ? dish.ingredients : dish.ingredients ? [dish.ingredients] : undefined,
+                            allergens: dish.allergens,
+                            calories: dish.calories ? `${dish.calories} kcal` : undefined,
+                            prepTime: dish.preparationTime,
+                            imageUrl: dish.imageUrl || undefined,
+                            isVegan: dish.isVegan,
+                            isVegetarian: dish.isVegetarian,
+                            isGlutenFree: dish.isGlutenFree,
+                            origin: dish.origin,
+                            category: dish.category,
+                            nutrition: dish.nutrition
+                        });
+                    }
+                    return {
+                        name: dish.name,
+                        description: dish.description,
+                        price: dish.price,
+                        category: dish.category,
+                        ingredients: dish.ingredients || [],
+                        allergens: dish.allergens || [],
+                        calories: dish.calories ? String(dish.calories) : undefined,
+                        prepTime: dish.preparationTime,
+                        origin: dish.origin,
+                        isVegan: dish.isVegan,
+                        isVegetarian: dish.isVegetarian,
+                        isGlutenFree: dish.isGlutenFree,
+                        imageUrl: dish.imageUrl || null,
+                        nutrition: dish.nutrition,
+                    };
+                })
+            );
+
             const botMsg: ChatMessage = {
                 id: Date.now() + 1,
                 text: replyText,
                 sender: 'bot',
-                imageUrl: finalImageUrl,
+                dishes: scannedDishes,
             };
             setChatMessages(prev => [...prev, botMsg]);
         } catch {
             const botMsg: ChatMessage = { id: Date.now() + 1, text: 'Sorry, there was an error connecting to the AI.', sender: 'bot' };
             setChatMessages(prev => [...prev, botMsg]);
+        } finally {
+            setChatLoading(false);
         }
     };
 
@@ -1247,6 +1254,7 @@ const newDishId = await addDishToDataset({
                             onLocationClick={(dish) => setSelectedLocationDish(dish as Dish)}
                             onNavigateToMealLog={() => setActiveTab('meallog')}
                             mealLogEntries={todayLog?.entries || []}
+                            nutritionGoals={nutritionGoals}
                         />
                     )}
                     {activeTab === 'results' && (
@@ -1285,6 +1293,9 @@ const newDishId = await addDishToDataset({
                             chatInput={chatInput}
                             setChatInput={setChatInput}
                             sendMessage={sendMessage}
+                            chatLoading={chatLoading}
+                            onDishClick={(item) => setSelectedDish(item)}
+                            userAllergens={foodProfile.allergens}
                         />
                     )}
                     {activeTab === 'profile' && (
@@ -1292,9 +1303,12 @@ const newDishId = await addDishToDataset({
                             user={auth.currentUser}
                             phoneNumber={phoneNumber}
                             foodProfile={foodProfile}
+                            bodyMetrics={bodyMetrics}
+                            nutritionGoals={nutritionGoals}
                             setShowEditProfile={handleOpenEditProfile}
                             setShowEditFoodProfile={handleOpenEditFoodProfile}
                             onLogout={onLogout}
+                            onNavigateToMealLog={() => setActiveTab('meallog')}
                         />
                     )}
                     {activeTab === 'history' && (
@@ -1325,6 +1339,12 @@ const newDishId = await addDishToDataset({
                             onShowToast={showToast}
                             selectedMealType={selectedMealType}
                             onMealTypeChange={setSelectedMealType}
+                            userAllergens={foodProfile.allergens}
+                            nutritionGoals={nutritionGoals}
+                            bodyMetrics={bodyMetrics}
+                            saveGoals={saveGoals}
+                            saveMetrics={saveMetrics}
+                            goalsLoading={goalsLoading}
                         />
                     )}
                 </main>
@@ -1645,19 +1665,39 @@ const newDishId = await addDishToDataset({
                                         </div>
                                     </>
                                 )}
-                                {selectedDish?.allergens && selectedDish.allergens.length > 0 && (
+                                {selectedDish?.allergens && selectedDish.allergens.length > 0 && (() => {
+                                    const allergyResult = checkAllergens(selectedDish, foodProfile.allergens);
+                                    const hasAllergenWarning = !allergyResult.isSafe;
+                                    return (
                                     <>
                                         <Separator />
+                                        {hasAllergenWarning && (
+                                            <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm font-semibold text-red-700">
+                                                <AlertTriangle size={18} className="shrink-0" />
+                                                This dish contains allergens you've flagged: {formatAllergenLabels(allergyResult.matchingAllergens)}
+                                            </div>
+                                        )}
                                         <div>
                                             <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Allergens</Label>
                                             <div className="flex flex-wrap gap-2 mt-2">
-                                                {selectedDish.allergens.map((allergen, idx) => (
-                                                    <span key={idx} className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">{allergen}</span>
-                                                ))}
+                                                {selectedDish.allergens.map((allergen, idx) => {
+                                                    const isMatching = hasAllergenWarning && allergyResult.matchingAllergens.some(
+                                                        a => a.toLowerCase() === (allergen || '').toLowerCase()
+                                                    );
+                                                    return (
+                                                        <span key={idx} className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                                                            isMatching ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+                                                        }`}>
+                                                            {isMatching && <AlertTriangle size={12} />}
+                                                            {allergen}
+                                                        </span>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     </>
-                                )}
+                                    );
+                                })()}
                                 <Separator />
                                 <div>
                                     <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Description</Label>
@@ -1750,6 +1790,46 @@ const newDishId = await addDishToDataset({
                                         </div>
                                     )}
                                 </div>
+
+                                {healthierAlternatives.length > 0 && (
+                                    <>
+                                        <Separator />
+                                        <div>
+                                            <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold flex items-center gap-1">
+                                                <Leaf size={14} /> Similar Healthier Alternatives
+                                            </Label>
+                                            <div className="space-y-2 mt-2">
+                                                {healthierAlternatives.map((alt, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        onClick={() => setSelectedDish(alt)}
+                                                        className="flex items-center gap-3 p-3 rounded-xl border border-green-200 bg-green-50/30 hover:bg-green-50 cursor-pointer transition-colors"
+                                                    >
+                                                        {alt.imageUrl ? (
+                                                            <img src={alt.imageUrl} alt={alt.name} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                                                        ) : (
+                                                            <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center text-xl shrink-0">🥗</div>
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-semibold text-gray-900 truncate">{alt.name}</p>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <span className="text-xs text-green-600 font-medium">{alt.price}</span>
+                                                                {alt.calories && (
+                                                                    <span className="text-xs text-amber-600">{alt.calories}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-1 shrink-0">
+                                                            {alt.isVegan && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Vegan</span>}
+                                                            {alt.isVegetarian && !alt.isVegan && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Veg</span>}
+                                                            {alt.isGlutenFree && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">GF</span>}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                         <div className="p-8 pt-0 mt-4">

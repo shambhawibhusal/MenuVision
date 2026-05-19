@@ -61,6 +61,12 @@ export const getHealthierAlternatives = (
     const alternatives: ScannedItem[] = [];
     const currentName = (currentDish?.name || '').toLowerCase();
 
+    const parseCalories = (cal: string | number | undefined): number => {
+        if (cal == null) return 0;
+        const str = String(cal);
+        return parseInt(str.match(/\d+/)?.[0] || '0');
+    };
+
     allDishes.forEach(dish => {
         if ((dish.name || '').toLowerCase() === currentName) return;
 
@@ -71,8 +77,8 @@ export const getHealthierAlternatives = (
         if (dish.isGlutenFree && !currentDish.isGlutenFree) score += 1;
 
         if (currentDish.calories && dish.calories) {
-            const currentCal = parseInt(currentDish.calories.match(/\d+/)?.[0] || '0');
-            const dishCal = parseInt(dish.calories.match(/\d+/)?.[0] || '0');
+            const currentCal = parseCalories(currentDish.calories);
+            const dishCal = parseCalories(dish.calories);
             if (dishCal < currentCal) score += 2;
         }
 
@@ -99,9 +105,9 @@ export const getHealthierAlternatives = (
         if (b.isGlutenFree && !currentDish.isGlutenFree) scoreB += 1;
 
         if (currentDish.calories && a.calories && b.calories) {
-            const currentCal = parseInt(currentDish.calories.match(/\d+/)?.[0] || '0');
-            const aCal = parseInt(a.calories.match(/\d+/)?.[0] || '0');
-            const bCal = parseInt(b.calories.match(/\d+/)?.[0] || '0');
+            const currentCal = parseCalories(currentDish.calories);
+            const aCal = parseCalories(a.calories);
+            const bCal = parseCalories(b.calories);
             if (aCal < currentCal) scoreA += 2;
             if (bCal < currentCal) scoreB += 2;
         }
@@ -124,4 +130,8 @@ export const getAllergenIcon = (allergen: string): string => {
         'sulfites': '🍷'
     };
     return icons[(allergen || '').toLowerCase()] || '⚠️';
+};
+
+export const formatAllergenLabels = (allergens: string[]): string => {
+    return allergens.map(a => `${getAllergenIcon(a)} ${a}`).join(', ');
 };

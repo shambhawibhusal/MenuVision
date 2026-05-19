@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { Search, Camera, Leaf, X, SlidersHorizontal, MapPin, Loader2, Star, ArrowUpDown, SearchX, History, Trash2, UtensilsCrossed, Flame, ChevronRight } from "lucide-react";
+import { Search, Camera, Leaf, X, SlidersHorizontal, MapPin, Loader2, Star, ArrowUpDown, SearchX, History, Trash2, UtensilsCrossed, Flame, ChevronRight, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dish, DishRating, DishGroup, MealLogEntry } from '@/types/dashboard';
+import { NutritionGoals } from '@/types/nutritionGoals';
 import MenuCard from './MenuCard';
 import DishGroupCard from './DishGroupCard';
 import { getSuggestions, getRecentSearches, addRecentSearch, clearRecentSearches } from '@/utils/search';
 import { normalizePrice } from '@/utils/recommendations';
+import { checkAllergens } from '@/services/allergyCheck';
 
 interface DishAverageRating {
     dishId: string;
@@ -63,6 +65,7 @@ interface HomeTabProps {
     onLocationClick?: (dish: Dish) => void;
     onNavigateToMealLog?: () => void;
     mealLogEntries?: MealLogEntry[];
+    nutritionGoals?: NutritionGoals | null;
 }
 
 const SORT_OPTIONS = [
@@ -96,7 +99,8 @@ const HomeTab: React.FC<HomeTabProps> = ({
     setSortBy,
     onLocationClick,
     onNavigateToMealLog,
-    mealLogEntries = []
+    mealLogEntries = [],
+    nutritionGoals = null,
 }) => {
     const [showFilters, setShowFilters] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -216,6 +220,20 @@ const HomeTab: React.FC<HomeTabProps> = ({
         activeFilters.budget.length > 0 || activeFilters.prepTime.length > 0 || activeFilters.cuisine.length > 0 || activeFilters.location !== '' || activeFilters.rating !== '';
 
     const showSuggestionsDropdown = showSuggestions && (suggestions.length > 0 || (recentSearches.length > 0 && !searchText.trim()));
+
+    const unsafeFilteredCount = useMemo(() => {
+        if (userAllergens.length === 0) return 0;
+        return filteredDishes.filter(d => !checkAllergens(d, userAllergens).isSafe).length;
+    }, [filteredDishes, userAllergens]);
+
+    const unsafeGroupedCount = useMemo(() => {
+        if (userAllergens.length === 0) return 0;
+        let count = 0;
+        for (const group of groupedDishes) {
+            count += group.restaurants.filter(d => !checkAllergens(d, userAllergens).isSafe).length;
+        }
+        return count;
+    }, [groupedDishes, userAllergens]);
 
     return (
         <div className="p-5 pt-8 animate-fade">
@@ -539,7 +557,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                             </div>
                             <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
                                 <span className="flex items-center gap-1">
-                                    <Flame size={12} className="text-orange-500" /> {mealLogStats.totalCalories} cal
+                                    <Flame size={12} className="text-orange-500" /> {mealLogStats.totalCalories}{nutritionGoals ? ` / ${nutritionGoals.dailyCalories}` : ''} cal
                                 </span>
                                 <span>•</span>
                                 <span>Rs. {mealLogStats.totalCost}</span>
@@ -558,6 +576,12 @@ const HomeTab: React.FC<HomeTabProps> = ({
 
             {searchText.trim() && groupedDishes.length > 0 ? (
                 <div className="flex flex-col gap-4">
+                    {unsafeGroupedCount > 0 && (
+                        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm font-medium text-red-700">
+                            <AlertTriangle size={16} />
+                            {unsafeGroupedCount} dish{unsafeGroupedCount !== 1 ? 'es' : ''} across results contain{unsafeGroupedCount === 1 ? 's' : ''} your allergens
+                        </div>
+                    )}
                     {groupedDishes.map((group) => (
                         <DishGroupCard
                             key={group.name}
@@ -573,6 +597,12 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </div>
             ) : filteredDishes.length > 0 ? (
                 <div className="flex flex-col gap-4">
+                    {unsafeFilteredCount > 0 && (
+                        <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm font-medium text-red-700">
+                            <AlertTriangle size={16} />
+                            {unsafeFilteredCount} of {filteredDishes.length} dish{filteredDishes.length !== 1 ? 'es' : ''} contain{unsafeFilteredCount === 1 ? 's' : ''} your allergens
+                        </div>
+                    )}
                     {filteredDishes.map((dish, index) => {
                         const dishName = dish?.name || 'Unknown';
                         const isLiked = favoriteItems.some(fav => fav.id === dish.id);

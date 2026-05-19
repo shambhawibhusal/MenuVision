@@ -1,4 +1,4 @@
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import {
     collection,
     query,
@@ -30,6 +30,7 @@ const generateDishId = (dishName: string): string => {
  * Check if a dish exists in the dataset by name (case-insensitive)
  */
 export const checkDishInDataset = async (dishName: string): Promise<MenuDatasetItem | null> => {
+    if (!auth.currentUser) { console.warn('[Dataset Service] No authenticated user, skipping checkDishInDataset'); return null; }
     try {
         const normalizedName = dishName.toLowerCase().trim();
         const dishId = generateDishId(dishName);
@@ -83,6 +84,7 @@ export const checkDishInDataset = async (dishName: string): Promise<MenuDatasetI
  * Search dishes by name (partial match, case-insensitive)
  */
 export const searchDishesByName = async (searchTerm: string): Promise<MenuDatasetItem[]> => {
+    if (!auth.currentUser) { console.warn('[Dataset Service] No authenticated user, skipping searchDishesByName'); return []; }
     try {
         const normalizedSearch = searchTerm.toLowerCase().trim();
 
@@ -114,6 +116,7 @@ export const searchDishesByName = async (searchTerm: string): Promise<MenuDatase
  * Add a new dish to the dataset
  */
 export const addDishToDataset = async (dish: Omit<MenuDatasetItem, 'id' | 'createdAt' | 'updatedAt' | 'scanCount'>): Promise<string | null> => {
+    if (!auth.currentUser) { console.warn('[Dataset Service] No authenticated user, skipping addDishToDataset'); return null; }
     try {
         const dishId = generateDishId(dish.name);
         const docRef = doc(db, DATASET_COLLECTION, dishId);
@@ -171,6 +174,7 @@ export const updateDishInDataset = async (
     dishId: string,
     data: Partial<Omit<MenuDatasetItem, 'id' | 'createdAt' | 'updatedAt'>>
 ): Promise<boolean> => {
+    if (!auth.currentUser) { console.warn('[Dataset Service] No authenticated user, skipping updateDishInDataset'); return false; }
     try {
         const docRef = doc(db, DATASET_COLLECTION, dishId);
         await updateDoc(docRef, {
@@ -188,6 +192,7 @@ export const updateDishInDataset = async (
  * Increment scan count for an existing dish
  */
 export const incrementScanCount = async (dishId: string): Promise<boolean> => {
+    if (!auth.currentUser) { console.warn('[Dataset Service] No authenticated user, skipping incrementScanCount'); return false; }
     try {
         const docRef = doc(db, DATASET_COLLECTION, dishId);
         await updateDoc(docRef, {
@@ -206,6 +211,7 @@ export const incrementScanCount = async (dishId: string): Promise<boolean> => {
  * Get dish by ID
  */
 export const getDishById = async (dishId: string): Promise<MenuDatasetItem | null> => {
+    if (!auth.currentUser) { console.warn('[Dataset Service] No authenticated user, skipping getDishById'); return null; }
     try {
         const docRef = doc(db, DATASET_COLLECTION, dishId);
         const docSnap = await getDoc(docRef);

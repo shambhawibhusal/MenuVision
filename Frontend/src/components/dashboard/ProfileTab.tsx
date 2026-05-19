@@ -1,32 +1,41 @@
 import React from 'react';
-import { Edit, LogOut, Leaf, Wheat } from "lucide-react";
+import { Edit, LogOut, Leaf, Wheat, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 
-import { User } from 'firebase/auth';
+import { User as FirebaseUser } from 'firebase/auth';
 import { FoodProfile, Allergen } from '@/types/dashboard';
+import { UserBodyMetrics, NutritionGoals } from '@/types/nutritionGoals';
 
 interface ProfileTabProps {
-    user: User | null;
+    user: FirebaseUser | null;
     phoneNumber?: string;
     foodProfile?: FoodProfile;
+    bodyMetrics?: UserBodyMetrics | null;
+    nutritionGoals?: NutritionGoals | null;
     setShowEditProfile: (v: boolean) => void;
     setShowEditFoodProfile: (v: boolean) => void;
     onLogout: () => void;
+    onNavigateToMealLog?: () => void;
 }
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
     user,
     phoneNumber,
     foodProfile,
+    bodyMetrics,
+    nutritionGoals,
     setShowEditProfile,
     setShowEditFoodProfile,
-    onLogout
+    onLogout,
+    onNavigateToMealLog
 }) => {
     const hasDietaryPreferences = foodProfile?.isVegetarian || foodProfile?.isVegan || foodProfile?.isGlutenFree;
     const hasAllergens = foodProfile?.allergens && foodProfile.allergens.length > 0;
+    const hasBodyMetrics = bodyMetrics && (bodyMetrics.age || bodyMetrics.weightKg || bodyMetrics.heightCm);
+    const hasGoals = nutritionGoals !== null;
 
     return (
         <div className="p-5 flex flex-col h-full animate-fade overflow-y-auto">
@@ -70,6 +79,48 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                                 <span className="text-gray-400 text-sm">No preferences set</span>
                             )}
                         </div>
+                    </div>
+
+                    <Separator />
+
+                    {(hasBodyMetrics || hasGoals) && (
+                        <>
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Body & Goals</h3>
+                                </div>
+                                {hasBodyMetrics && (
+                                    <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                                        {bodyMetrics?.age && <span className="px-2 py-1 bg-gray-100 rounded-lg">{bodyMetrics.age} yr</span>}
+                                        {bodyMetrics?.weightKg && <span className="px-2 py-1 bg-gray-100 rounded-lg">{bodyMetrics.weightKg} kg</span>}
+                                        {bodyMetrics?.heightCm && <span className="px-2 py-1 bg-gray-100 rounded-lg">{bodyMetrics.heightCm} cm</span>}
+                                        {bodyMetrics?.activityLevel && (
+                                            <span className="px-2 py-1 bg-gray-100 rounded-lg capitalize">
+                                                {bodyMetrics.activityLevel.replace('_', ' ')}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {hasGoals && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Target size={16} className="text-amber-500" />
+                                        <span className="font-bold text-amber-700">{nutritionGoals!.dailyCalories} kcal/day</span>
+                                    </div>
+                                )}
+                            </div>
+                            <Separator />
+                        </>
+                    )}
+
+                    <div className="space-y-3">
+                        <Button
+                            onClick={onNavigateToMealLog}
+                            variant="outline"
+                            className="w-full h-12 rounded-2xl text-base font-bold border-amber-300 bg-amber-50 hover:bg-amber-100 gap-2"
+                        >
+                            <Target size={18} className="text-amber-500" />
+                            {hasGoals ? 'Edit Nutrition Goals' : 'Set Nutrition Goals'}
+                        </Button>
                     </div>
 
                     <Separator />

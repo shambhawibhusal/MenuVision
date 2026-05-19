@@ -5,30 +5,35 @@ import { MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ChatMessage } from '@/types/dashboard';
+import { ChatMessage, ScannedItem } from '@/types/dashboard';
+import MenuCard from '@/components/dashboard/MenuCard';
 
 interface ChatTabProps {
     chatMessages: ChatMessage[];
     chatInput: string;
     setChatInput: (v: string) => void;
     sendMessage: () => void;
+    chatLoading?: boolean;
+    onDishClick?: (item: ScannedItem) => void;
+    userAllergens?: string[];
 }
 
 const preprocessText = (text: string) => {
-    // Add double newlines before headers if they're preceded by a space and not already a newline
-    // This handles models that sometimes forget to space out markdown headers
     return text
         .replace(/ ([#]+ )/g, '\n\n$1')
         .replace(/ ([*]{2})/g, '\n\n$1')
         .replace(/ ([-*] )/g, '\n\n$1')
-        .replace(/(\d+\. )/g, '\n$1'); // Handle lists too
+        .replace(/(\d+\. )/g, '\n$1');
 };
 
 const ChatTab: React.FC<ChatTabProps> = ({
     chatMessages,
     chatInput,
     setChatInput,
-    sendMessage
+    sendMessage,
+    chatLoading,
+    onDishClick,
+    userAllergens,
 }) => {
     return (
         <div className="flex flex-col h-full bg-[#f8f9fa] animate-fade">
@@ -73,9 +78,33 @@ const ChatTab: React.FC<ChatTabProps> = ({
                                     {msg.sender === 'bot' ? preprocessText(msg.text) : msg.text}
                                 </ReactMarkdown>
                             </div>
+                            {msg.sender === 'bot' && msg.dishes && msg.dishes.length > 0 && (
+                                <div className="mt-4 space-y-3">
+                                    <SeparatorDots />
+                                    {msg.dishes.map((dish, i) => (
+                                        <MenuCard
+                                            key={i}
+                                            item={dish}
+                                            onClick={() => onDishClick?.(dish)}
+                                            userAllergens={userAllergens}
+                                        />
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
+                {chatLoading && (
+                    <div className="flex justify-start mr-auto max-w-[85%]">
+                        <div className="p-4 rounded-2xl bg-white border border-gray-100 rounded-tl-none">
+                            <div className="flex gap-1.5">
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <Card className="rounded-none border-x-0 border-b-0 shadow-none p-3 bg-white">
@@ -86,8 +115,9 @@ const ChatTab: React.FC<ChatTabProps> = ({
                         placeholder="Ask anything about food..."
                         className="flex-1 border-gray-200 h-12 rounded-xl focus-visible:ring-black"
                         onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                        disabled={chatLoading}
                     />
-                    <Button onClick={sendMessage} className="bg-black hover:bg-gray-800 text-white rounded-xl w-12 h-12 p-0">
+                    <Button onClick={sendMessage} disabled={chatLoading} className="bg-black hover:bg-gray-800 text-white rounded-xl w-12 h-12 p-0 disabled:opacity-50">
                         <MessageSquare size={20} />
                     </Button>
                 </div>
@@ -95,5 +125,13 @@ const ChatTab: React.FC<ChatTabProps> = ({
         </div>
     );
 };
+
+const SeparatorDots = () => (
+    <div className="flex items-center gap-1.5 py-1">
+        <span className="w-1 h-1 rounded-full bg-gray-300" />
+        <span className="w-1 h-1 rounded-full bg-gray-300" />
+        <span className="w-1 h-1 rounded-full bg-gray-300" />
+    </div>
+);
 
 export default ChatTab;

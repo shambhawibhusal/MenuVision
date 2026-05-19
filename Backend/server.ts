@@ -485,110 +485,210 @@ interface ChatRequestBody {
     message: string;
 }
 
+const ChatResponseSchema = z.object({
+    response: z.string(),
+    dishes: z.array(FoodItemSchema)
+});
+
+async function searchMenuDataset(searchTerm: string): Promise<any[]> {
+    try {
+        const normalizedSearch = searchTerm.toLowerCase().trim();
+        const snapshot = await firestore.collection('menuDataset')
+            .where('nameLower', '>=', normalizedSearch)
+            .where('nameLower', '<=', normalizedSearch + '\uf8ff')
+            .limit(5)
+            .get();
+
+        if (snapshot.empty) return [];
+
+        return snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+    } catch (error) {
+        console.error('[Dataset] Error searching dataset:', error);
+        return [];
+    }
+}
+
+const STOPWORDS = new Set([
+    'a', 'an', 'the', 'me', 'show', 'find', 'give', 'tell', 'what', 'suggest', 'recommend', 'search',
+    'are', 'is', 'any', 'some', 'for', 'about', 'can', 'you', 'please', 'i', 'want', 'need', 'looking',
+    'help', 'with', 'dishes', 'dish', 'food', 'items', 'recipe', 'of', 'in', 'like', 'that', 'have',
+    'to', 'and', 'or', 'it', 'this', 'these', 'those', 'something', 'good', 'best', 'popular',
+    'maybe', 'how', 'do', 'does', 'could', 'would', 'should', 'get', 'list', 'see', 'has', 'had',
+    'been', 'be', 'we', 'they', 'he', 'she', 'his', 'her', 'our', 'your', 'my', 'there', 'here',
+    'from', 'just', 'only', 'also', 'too', 'very', 'more', 'not', 'now', 'then', 'than', 'by',
+    'compare', 'versus', 'vs', 'difference', 'between', 'which', 'who', 'where', 'when',
+    'why', 'know', 'think', 'trying', 'wish', 'let', 'make', 'made', 'all', 'each',
+    'every', 'one', 'two', 'three', 'few', 'many', 'much', 'lot', 'lots'
+]);
+
+function extractSearchKeywords(query: string): string[] {
+    const words = query.toLowerCase().trim().split(/[\s,!.?;:]+/).filter(w => w.length > 1);
+    const keywords = words.filter(w => !STOPWORDS.has(w));
+    return [...new Set(keywords)];
+}
+
 app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) => {
     try {
         const { message } = req.body;
         if (!message) throw new Error("Message is required");
 
-        const existingDish = await checkDishInDataset(message);
-        
-        if (existingDish) {
-            console.log(`[Dataset] Found existing dish for query: "${message}"`);
-            return res.json({
-                success: true,
-                imageUrl: existingDish.imageUrl,
-                data: {
-                    name: existingDish.name,
-                    description: existingDish.description,
-                    price: existingDish.price,
-                    category: existingDish.category,
-                    ingredients: existingDish.ingredients,
-                    allergens: existingDish.allergens,
-                    calories: existingDish.calories,
-                    preparationTime: existingDish.preparationTime,
-                    origin: existingDish.origin,
-                    isVegan: existingDish.isVegan,
-                    isVegetarian: existingDish.isVegetarian,
-                    isGlutenFree: existingDish.isGlutenFree,
-                    nutrition: existingDish.nutrition
-                },
-                fromCache: true
-            });
+        const keywords = extractSearchKeywords(message);
+
+        const combinedMatches: any[] = [];
+        const seenIds = new Set<string>();
+
+        if (keywords.length > 0) {
+            for (const kw of keywords) {
+                const matches = await searchMenuDataset(kw);
+                for (const match of matches) {
+                    if (!seenIds.has(match.id)) {
+                        seenIds.add(match.id);
+                        combinedMatches.push(match);
+                    }
+                }
+            }
         }
 
-        console.log(`[Dataset] Dish not found for query: "${message}" - calling AI`);
+        if (combinedMatches.length > 0) {
+            console.log(`[Chat] Found ${combinedMatches.length} dataset matches for keywords: [${keywords.join(', ')}]`);
 
-        const { text } = await generateText({
+            const dishList = combinedMatches.map(d =>
+                `${d.name}${d.price ? ' (' + d.price + ')' : ''}${d.place ? ' from ' + d.place : ''}${d.description ? ': ' + d.description : ''}`
+            ).join('; ');
+
+            const { text } = await generateText({
+                model: model,
+                system: "You are a friendly food expert AI. Write a short, helpful, conversational response to the user's query. Naturally mention the dishes you're about to show. Keep it warm and brief.",
+                prompt: `The user asked: "${message}". We found these dishes in our collection: ${dishList}. Write a short conversational reply introducing these dishes to the user.`,
+            });
+
+            const formattedDishes = combinedMatches.map(d => ({
+                name: d.name,
+                description: d.description || null,
+                price: d.price || null,
+                category: d.category || null,
+                ingredients: d.ingredients || [],
+                allergens: d.allergens || [],
+                calories: d.calories || null,
+                preparationTime: formatPrepTime(d.preparationTime),
+                origin: d.origin || null,
+                isVegan: d.isVegan ?? null,
+                isVegetarian: d.isVegetarian ?? null,
+                isGlutenFree: d.isGlutenFree ?? null,
+                imageUrl: d.imageUrl || null,
+                nutrition: d.nutrition || { protein: 0, carbohydrates: 0, fat: 0, fiber: 0, sodium: 0 }
+            }));
+
+            res.json({
+                success: true,
+                replyText: text.trim(),
+                dishes: formattedDishes,
+                fromCache: true
+            });
+            return;
+        }
+
+        console.log(`[Chat] No dataset matches - calling AI for: "${message}"`);
+
+        const { object } = await generateObject({
             model: model,
-            system: "You are a helpful food expert AI. Provide detailed information about the requested food item. You MUST return ONLY a JSON object that strictly follows the provided schema. Do not include any other text, markdown blocks, or explanations. All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., 'Rs. 250', 'Rs. 450'). ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field.",
-            prompt: `Return information for "${message}" strictly according to this JSON schema:
-            {
-                "name": "string",
-                "description": "string or null",
-                "price": "string or null - format as 'Rs. XXX' in Nepalese Rupees (NPR)",
-                "category": "string or null",
-                "ingredients": ["string"],
-                "allergens": ["string"],
-                "calories": "number or null",
-                "preparationTime": "number in minutes or null",
-                "origin": "string or null",
-                "isVegan": "boolean or null",
-                "isVegetarian": "boolean or null",
-                "isGlutenFree": "boolean or null",
-                "nutrition": {
-                    "protein": "number (e.g., 25)",
-                    "carbohydrates": "number (e.g., 45)",
-                    "fat": "number (e.g., 15)",
-                    "fiber": "number (e.g., 5)",
-                    "sodium": "number (e.g., 400)"
+            schema: ChatResponseSchema,
+            system: "You are a friendly and knowledgeable food expert AI assistant. Respond conversationally and helpfully to the user's query about food dishes, cuisines, ingredients, or nutrition. Provide interesting information, cultural context, preparation insights, or recommendations as appropriate. Then include structured dish data for the dishes you mention in your response. All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX'. ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field. If the user's query is not about a specific food dish, you may return an empty dishes array and respond conversationally.",
+            messages: [
+                { role: "user", content: [{ type: "text", text: message }] },
+            ],
+        });
+
+        const replyText = object.response;
+        const llmDishes = object.dishes;
+        let anyFromCache = false;
+
+        const processedDishes = await Promise.all(
+            llmDishes.map(async (dish) => {
+                const existingDish = await checkDishInDataset(dish.name);
+
+                const normalizedNutrition = dish.nutrition ? {
+                    protein: dish.nutrition.protein ?? 0,
+                    carbohydrates: dish.nutrition.carbohydrates ?? 0,
+                    fat: dish.nutrition.fat ?? 0,
+                    fiber: dish.nutrition.fiber ?? 0,
+                    sodium: dish.nutrition.sodium ?? 0
+                } : { protein: 0, carbohydrates: 0, fat: 0, fiber: 0, sodium: 0 };
+
+                if (existingDish) {
+                    anyFromCache = true;
+                    console.log(`[Dataset] Found cached dish: "${dish.name}"`);
+                    return {
+                        name: dish.name,
+                        description: existingDish.description,
+                        price: existingDish.price,
+                        category: existingDish.category,
+                        ingredients: existingDish.ingredients || [],
+                        allergens: existingDish.allergens || [],
+                        calories: existingDish.calories,
+                        preparationTime: existingDish.preparationTime,
+                        origin: existingDish.origin,
+                        isVegan: existingDish.isVegan,
+                        isVegetarian: existingDish.isVegetarian,
+                        isGlutenFree: existingDish.isGlutenFree,
+                        imageUrl: existingDish.imageUrl || null,
+                        nutrition: existingDish.nutrition ? {
+                            protein: existingDish.nutrition.protein ?? 0,
+                            carbohydrates: existingDish.nutrition.carbohydrates ?? 0,
+                            fat: existingDish.nutrition.fat ?? 0,
+                            fiber: existingDish.nutrition.fiber ?? 0,
+                            sodium: existingDish.nutrition.sodium ?? 0
+                        } : normalizedNutrition
+                    };
                 }
-            }`,
-        });
 
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        const jsonContent = jsonMatch ? jsonMatch[0] : text;
-        const object = JSON.parse(jsonContent);
+                console.log(`[Chat] New dish: "${dish.name}" - generating image`);
+                const imageUrl = await generateDishImage(dish.name);
 
-        const dishName = object.name || message;
-        console.log(`[Chat] Processing image for dish: "${dishName}"`);
-        const imageUrl = await generateDishImage(dishName);
-        console.log(`[Chat] Image URL result: ${imageUrl}`);
+                await saveDishToDataset({
+                    name: dish.name,
+                    description: dish.description,
+                    price: dish.price,
+                    category: dish.category,
+                    ingredients: dish.ingredients,
+                    allergens: dish.allergens,
+                    calories: dish.calories,
+                    preparationTime: dish.preparationTime,
+                    origin: dish.origin,
+                    isVegan: dish.isVegan,
+                    isVegetarian: dish.isVegetarian,
+                    isGlutenFree: dish.isGlutenFree,
+                    imageUrl: imageUrl,
+                    nutrition: normalizedNutrition
+                });
 
-        const formattedData = {
-            ...object,
-            preparationTime: formatPrepTime(object.preparationTime)
-        };
-
-        const chatNutrition = object.nutrition ? {
-            protein: object.nutrition.protein ?? 0,
-            carbohydrates: object.nutrition.carbohydrates ?? 0,
-            fat: object.nutrition.fat ?? 0,
-            fiber: object.nutrition.fiber ?? 0,
-            sodium: object.nutrition.sodium ?? 0
-        } : { protein: 0, carbohydrates: 0, fat: 0, fiber: 0, sodium: 0 };
-
-        await saveDishToDataset({
-            name: dishName,
-            description: object.description,
-            price: object.price,
-            category: object.category,
-            ingredients: object.ingredients,
-            allergens: object.allergens,
-            calories: object.calories,
-            preparationTime: object.preparationTime,
-            origin: object.origin,
-            isVegan: object.isVegan,
-            isVegetarian: object.isVegetarian,
-            isGlutenFree: object.isGlutenFree,
-            imageUrl: imageUrl,
-            nutrition: chatNutrition
-        });
+                return {
+                    name: dish.name,
+                    description: dish.description,
+                    price: dish.price,
+                    category: dish.category,
+                    ingredients: dish.ingredients,
+                    allergens: dish.allergens,
+                    calories: dish.calories,
+                    preparationTime: formatPrepTime(dish.preparationTime),
+                    origin: dish.origin,
+                    isVegan: dish.isVegan,
+                    isVegetarian: dish.isVegetarian,
+                    isGlutenFree: dish.isGlutenFree,
+                    imageUrl: imageUrl || null,
+                    nutrition: normalizedNutrition
+                };
+            })
+        );
 
         res.json({
             success: true,
-            imageUrl,
-            data: formattedData,
-            fromCache: false
+            replyText,
+            dishes: processedDishes,
+            fromCache: anyFromCache
         });
 
     } catch (err: any) {

@@ -1,13 +1,13 @@
 import React from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
-import { Heart, MapPin, Clock, UtensilsCrossed, Check, TrendingUp, Eye, AlertTriangle, Shield, Leaf } from 'lucide-react';
+import { Heart, MapPin, Clock, UtensilsCrossed, Check, TrendingUp, Eye, AlertTriangle, Leaf } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
 import { normalizePrice } from '@/utils/recommendations';
 import { formatPrepTime } from '@/utils/formatters';
 import { getPopularityLabel, getPopularityColor } from '@/hooks/useDishPopularity';
-import { checkAllergens } from '@/services/allergyCheck';
+import { checkAllergens, formatAllergenLabels } from '@/services/allergyCheck';
 
 interface AllergyInfo {
     isSafe: boolean;
@@ -47,8 +47,13 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
 
             <div className="flex flex-col sm:flex-row sm:items-center h-full relative z-10">
                 {item.imageUrl && (
-                    <div className="w-full sm:w-28 h-32 sm:h-24 shrink-0 overflow-hidden">
+                    <div className="w-full sm:w-28 h-32 sm:h-24 shrink-0 overflow-hidden relative">
                         <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                        {hasAllergenWarning && (
+                            <div className="absolute top-1.5 right-1.5 bg-red-500 text-white rounded-full p-1 shadow-md z-20">
+                                <AlertTriangle size={16} />
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -60,11 +65,8 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                             </CardTitle>
                             {hasAllergenWarning && (
                                 <div className="flex items-center gap-1 mt-1">
-                                    <span className="text-xs font-medium text-red-600 bg-red-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                        <AlertTriangle size={12} /> Contains: {computedAllergyInfo?.matchingAllergens.join(', ')}
-                                    </span>
-                                    <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                        <Shield size={12} /> Safe option available
+                                    <span className="text-xs font-semibold text-red-600 bg-red-100 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                                        <AlertTriangle size={12} /> {formatAllergenLabels(computedAllergyInfo?.matchingAllergens || [])}
                                     </span>
                                 </div>
                             )}

@@ -140,6 +140,7 @@ export interface ChatMessage {
     text: string;
     sender: 'user' | 'bot';
     imageUrl?: string | null;
+    dishes?: ScannedItem[];
 }
 
 export type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history' | 'meallog';
@@ -186,6 +187,7 @@ export interface MealLogEntry {
     place?: string;
     calories?: string;
     imageUrl?: string | null;
+    allergens?: string[];
     mealType: MealType;
     date: string;
     addedAt: string;

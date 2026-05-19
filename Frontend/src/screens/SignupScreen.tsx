@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
     createUserWithEmailAndPassword,
     updateProfile,
+    sendEmailVerification,
     GoogleAuthProvider,
     signInWithPopup
 } from 'firebase/auth';
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Check, X } from 'lucide-react';
 
 
 import { User } from 'firebase/auth';
@@ -21,15 +23,38 @@ import { User } from 'firebase/auth';
 interface SignupScreenProps {
     onBack: () => void;
     onSignupSuccess: (user: User) => void;
+    onVerifyEmail: (user: User) => void;
 }
 
-const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) => {
-    const [formData, setFormData] = useState({ email: '', fullname: '', phone: '', password: '', confirmPassword: '' });
+interface PasswordRule {
+    label: string;
+    test: (pw: string) => boolean;
+}
+
+const PASSWORD_RULES: PasswordRule[] = [
+    { label: 'At least 8 characters', test: (pw: string) => pw.length >= 8 },
+    { label: 'One uppercase letter (A-Z)', test: (pw: string) => /[A-Z]/.test(pw) },
+    { label: 'One lowercase letter (a-z)', test: (pw: string) => /[a-z]/.test(pw) },
+    { label: 'One number (0-9)', test: (pw: string) => /[0-9]/.test(pw) },
+    { label: 'One special character (!@#$%^&*)', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
+];
+
+const allRulesPass = (pw: string) => PASSWORD_RULES.every(r => r.test(pw));
+
+const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess, onVerifyEmail }) => {
+    const [formData, setFormData] = useState({ email: '', firstName: '', lastName: '', password: '', confirmPassword: '' });
 
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPasswordRules, setShowPasswordRules] = useState(false);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setFormData({ ...formData, [name]: value });
+        if (name === 'password' && value.length > 0) {
+            setShowPasswordRules(true);
+        }
+    };
 
     const handleGoogleSignup = async () => {
         setLoading(true);
@@ -40,7 +65,6 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
             const user = result.user;
 
             const userDocRef = doc(db, "users", user.uid);
-            // Always merge metadata, even if doc exists, to ensure profile is complete (Field Repair)
             await setDoc(userDocRef, {
                 uid: user.uid,
                 fullname: user.displayName || 'Unknown',
@@ -58,11 +82,10 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
     };
 
     const handleSignupClick = async () => {
-        const { email, fullname, phone, password, confirmPassword } = formData;
-        if (!email || !fullname || !phone || !password || !confirmPassword) { setError('Please fill in all fields.'); return; }
+        const { email, firstName, lastName, password, confirmPassword } = formData;
+        if (!email || !firstName || !lastName || !password || !confirmPassword) { setError('Please fill in all fields.'); return; }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Invalid email address.'); return; }
-        if (phone.length !== 10 || !/^[0-9]+$/.test(phone)) { setError('Phone number must be exactly 10 digits.'); return; }
-        if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+        if (!allRulesPass(password)) { setError('Password does not meet all requirements.'); setShowPasswordRules(true); return; }
         if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
         setLoading(true); setError('');
 
@@ -70,17 +93,20 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const user = userCredential.user;
 
-            await updateProfile(user, { displayName: fullname });
+            await updateProfile(user, { displayName: `${firstName} ${lastName}`.trim() });
             await setDoc(doc(db, "users", user.uid), {
                 uid: user.uid,
-                fullname: fullname,
+                fullname: `${firstName} ${lastName}`.trim(),
+                firstName: firstName,
+                lastName: lastName,
                 email: email,
-                phoneNumber: phone,
                 createdAt: new Date(),
                 favorites: [],
                 history: []
             }, { merge: true });
-            onSignupSuccess(user);
+
+            await sendEmailVerification(user);
+            onVerifyEmail(user);
         } catch (err: any) {
             console.error(err);
             setLoading(false);
@@ -108,12 +134,12 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
                         <CardContent className="space-y-4 px-6 pt-2">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="fullname" className="text-xs font-semibold text-gray-700">Full Name</Label>
-                                    <Input id="fullname" name="fullname" value={formData.fullname} onChange={handleChange} placeholder="John Doe" autoComplete="name" className="h-9 border-gray-200" />
+                                    <Label htmlFor="firstName" className="text-xs font-semibold text-gray-700">First Name</Label>
+                                    <Input id="firstName" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="John" autoComplete="given-name" className="h-9 border-gray-200" />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="phone" className="text-xs font-semibold text-gray-700">Phone</Label>
-                                    <Input id="phone" name="phone" value={formData.phone} placeholder="98XXXXXXXX" onChange={handleChange} type="tel" autoComplete="tel" className="h-9 border-gray-200" />
+                                    <Label htmlFor="lastName" className="text-xs font-semibold text-gray-700">Last Name</Label>
+                                    <Input id="lastName" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Doe" autoComplete="family-name" className="h-9 border-gray-200" />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
@@ -130,6 +156,20 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
                                     <Input id="confirmPassword" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} type="password" placeholder="••••••••" autoComplete="new-password" className="h-9 border-gray-200" />
                                 </div>
                             </div>
+                            {showPasswordRules && (
+                                <div className="space-y-1.5 p-3 rounded-lg bg-gray-50">
+                                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Password Requirements</p>
+                                    {PASSWORD_RULES.map((rule) => {
+                                        const passes = rule.test(formData.password);
+                                        return (
+                                            <div key={rule.label} className={`flex items-center gap-2 text-xs ${passes ? 'text-green-600' : 'text-gray-400'}`}>
+                                                {passes ? <Check size={14} /> : <X size={14} />}
+                                                {rule.label}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                             {error && <div className="text-red-600 text-[12px] font-bold text-center">{error}</div>}
                         </CardContent>
                         <CardFooter className="flex flex-col pb-8 px-6">
@@ -172,4 +212,3 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess }) 
 }
 
 export default SignupScreen;
-

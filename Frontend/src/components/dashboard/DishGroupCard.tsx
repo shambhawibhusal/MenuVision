@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { DishGroup, Dish, DishRating } from '@/types/dashboard';
-import { Heart, MapPin, ChevronDown, ChevronUp, Star } from 'lucide-react';
+import { Heart, MapPin, ChevronDown, ChevronUp, Star, AlertTriangle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { normalizePrice } from '@/utils/recommendations';
+import { checkAllergens } from '@/services/allergyCheck';
 
 interface DishGroupCardProps {
     group: DishGroup;
@@ -22,7 +23,7 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
     isLiked,
     dishRatings = {},
     onLocationClick,
-    userAllergens: _userAllergens = []
+    userAllergens = []
 }) => {
     const [expanded, setExpanded] = useState(false);
 
@@ -31,6 +32,11 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
         const ratingB = b.averageRating || 0;
         return ratingB - ratingA;
     });
+
+    const unsafeDishes = userAllergens.length > 0
+        ? sortedRestaurants.filter(d => !checkAllergens(d, userAllergens).isSafe)
+        : [];
+    const unsafeCount = unsafeDishes.length;
 
     return (
         <Card className="bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all overflow-hidden relative rounded-2xl">
@@ -64,6 +70,12 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
                                     </span>
                                 </div>
                             )}
+
+                            {unsafeCount > 0 && (
+                                <span className="text-xs font-semibold text-red-600 bg-red-100 border border-red-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <AlertTriangle size={11} /> {unsafeCount} dish{unsafeCount !== 1 ? 'es' : ''} contain{unsafeCount === 1 ? 's' : ''} your allergens
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -90,11 +102,15 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
                             const dishName = dish.name || '';
                             const liked = isLiked(dishName);
                             const isGroupByRestaurant = group.name?.toLowerCase() === dish.place?.toLowerCase();
+                            const allergyCheck = userAllergens.length > 0 ? checkAllergens(dish, userAllergens) : null;
+                            const hasAllergenWarning = allergyCheck && !allergyCheck.isSafe;
 
                             return (
                                 <div
                                     key={idx}
-                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer"
+                                    className={`flex items-center justify-between p-3 rounded-lg hover:bg-amber-50 transition-colors cursor-pointer ${
+                                        hasAllergenWarning ? 'bg-red-50 border border-red-200' : 'bg-gray-50'
+                                    }`}
                                     onClick={() => onSelectDish(dish)}
                                 >
                                     <div className="flex-1 min-w-0">
@@ -102,6 +118,11 @@ const DishGroupCard: React.FC<DishGroupCardProps> = ({
                                             <span className="font-medium text-gray-900 truncate">
                                                 {isGroupByRestaurant ? dishName : dish.place}
                                             </span>
+                                            {hasAllergenWarning && (
+                                                <span className="text-xs font-semibold text-red-600 bg-red-100 border border-red-200 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 shrink-0">
+                                                    <AlertTriangle size={10} />
+                                                </span>
+                                            )}
                                             {dish.location && (
                                                 <span className="text-xs text-gray-500 truncate">
                                                     {dish.location}

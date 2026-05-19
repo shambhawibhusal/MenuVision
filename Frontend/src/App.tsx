@@ -3,13 +3,14 @@ import { auth, db } from './firebase';
 import SplashScreen from './screens/SplashScreen';
 import LoginScreen from './screens/LoginScreen';
 import SignupScreen from './screens/SignupScreen';
+import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Dashboard from './screens/Dashboard';
 import OnboardingScreen from './screens/OnboardingScreen';
 import { User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-type Screen = 'splash' | 'login' | 'signup' | 'onboarding' | 'dashboard';
+type Screen = 'splash' | 'login' | 'signup' | 'verifyEmail' | 'onboarding' | 'dashboard';
 
 export default function App() {
     const [user, setUser] = useState<User | null>(null);
@@ -19,6 +20,7 @@ export default function App() {
         return (saved as Screen) || 'splash';
     });
     const [pendingOnboardingUser, setPendingOnboardingUser] = useState<User | null>(null);
+    const [pendingVerifyUser, setPendingVerifyUser] = useState<User | null>(null);
     const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
     const updateScreen = (screen: Screen) => {
@@ -44,25 +46,40 @@ export default function App() {
     useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (currentUser: User | null) => {
             setUser(currentUser);
-            
+
             if (currentUser) {
-                const savedScreen = sessionStorage.getItem('currentScreen');
-                if (savedScreen === 'dashboard' || savedScreen === 'onboarding') {
-                    const shouldOnboard = await checkOnboardingStatus(currentUser);
-                    if (shouldOnboard && savedScreen !== 'onboarding') {
-                        updateScreen('onboarding');
-                    } else if (!shouldOnboard) {
-                        updateScreen('dashboard');
-                    }
-                } else if (isLoggingIn) {
-                    const shouldOnboard = await checkOnboardingStatus(currentUser);
-                    if (shouldOnboard) {
-                        updateScreen('onboarding');
+                if (!currentUser.emailVerified) {
+                    setPendingVerifyUser(currentUser);
+                    updateScreen('verifyEmail');
+                } else {
+                    const savedScreen = sessionStorage.getItem('currentScreen');
+                    if (savedScreen === 'dashboard' || savedScreen === 'onboarding') {
+                        const shouldOnboard = await checkOnboardingStatus(currentUser);
+                        if (shouldOnboard && savedScreen !== 'onboarding') {
+                            updateScreen('onboarding');
+                        } else if (!shouldOnboard) {
+                            updateScreen('dashboard');
+                        }
+                    } else if (isLoggingIn) {
+                        const shouldOnboard = await checkOnboardingStatus(currentUser);
+                        if (shouldOnboard) {
+                            updateScreen('onboarding');
+                        } else {
+                            updateScreen('dashboard');
+                        }
+                        setIsLoggingIn(false);
                     } else {
-                        updateScreen('dashboard');
+                        const shouldOnboard = await checkOnboardingStatus(currentUser);
+                        if (shouldOnboard) {
+                            updateScreen('onboarding');
+                        } else {
+                            updateScreen('dashboard');
+                        }
                     }
-                    setIsLoggingIn(false);
                 }
+            } else {
+                setPendingVerifyUser(null);
+                setPendingOnboardingUser(null);
             }
             setLoading(false);
         });
@@ -82,6 +99,11 @@ export default function App() {
                         setUser(loggedInUser);
                         setIsLoggingIn(true);
                     }}
+                    onVerifyEmail={(loggedInUser: User) => {
+                        setUser(loggedInUser);
+                        setPendingVerifyUser(loggedInUser);
+                        updateScreen('verifyEmail');
+                    }}
                 />
             )}
             {currentScreen === 'signup' && (
@@ -91,6 +113,26 @@ export default function App() {
                         setUser(loggedInUser);
                         setPendingOnboardingUser(loggedInUser);
                         updateScreen('onboarding');
+                    }}
+                    onVerifyEmail={(loggedInUser: User) => {
+                        setUser(loggedInUser);
+                        setPendingVerifyUser(loggedInUser);
+                        updateScreen('verifyEmail');
+                    }}
+                />
+            )}
+            {currentScreen === 'verifyEmail' && pendingVerifyUser && (
+                <VerifyEmailScreen
+                    user={pendingVerifyUser}
+                    onVerified={() => {
+                        const verifiedUser = pendingVerifyUser;
+                        setPendingVerifyUser(null);
+                        setPendingOnboardingUser(verifiedUser);
+                        updateScreen('onboarding');
+                    }}
+                    onSignOut={() => {
+                        setPendingVerifyUser(null);
+                        updateScreen('splash');
                     }}
                 />
             )}
@@ -103,7 +145,7 @@ export default function App() {
                     }}
                 />
             )}
-            {currentScreen === 'dashboard' && user && !pendingOnboardingUser && (
+            {currentScreen === 'dashboard' && user && !pendingOnboardingUser && !pendingVerifyUser && (
                 <ErrorBoundary>
                     <Dashboard onLogout={() => {
                         auth.signOut();

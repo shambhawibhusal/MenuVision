@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '@/firebase';
-import { collection, getDocs, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
+import { getDoc, doc, updateDoc, increment, serverTimestamp } from 'firebase/firestore';
 
 interface DishPopularity {
     dishId: string;
@@ -27,11 +27,11 @@ export function useDishPopularity(dishIds: string[]): UseDishPopularityReturn {
             try {
                 for (const dishId of dishIds) {
                     try {
-                        const dishSnap = await getDocs(collection(db, 'menuDataset'));
-                        
-                        const found = dishSnap.docs.find(d => d.id === dishId);
-                        if (found) {
-                            const data = found.data();
+                        const dishRef = doc(db, 'menuDataset', dishId);
+                        const dishSnap = await getDoc(dishRef);
+
+                        if (dishSnap.exists()) {
+                            const data = dishSnap.data();
                             newPopularity[dishId] = {
                                 dishId,
                                 scanCount: data.scanCount || 0,
