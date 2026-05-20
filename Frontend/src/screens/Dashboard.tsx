@@ -378,7 +378,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
 
     // -- Data States
-    const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
+    const [scannedItems, setScannedItems] = useState<ScannedItem[]>(() => {
+        try {
+            const stored = sessionStorage.getItem('scannedItems');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            }
+        } catch {}
+        return [];
+    });
+
+    useEffect(() => {
+        if (scannedItems.length > 0) {
+            sessionStorage.setItem('scannedItems', JSON.stringify(scannedItems));
+        } else {
+            sessionStorage.removeItem('scannedItems');
+        }
+    }, [scannedItems]);
+
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
     const restaurantIdForModal = selectedDish?.place && selectedDish.place !== 'Scanned Menu'
         ? `${selectedDish.place}_${selectedDish.location || ''}`

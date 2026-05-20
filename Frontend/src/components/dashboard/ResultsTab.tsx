@@ -4,7 +4,8 @@ import { ScannedItem, Tab, Dish, DishRating } from '@/types/dashboard';
 import { resolveScannedItems } from '@/services/menuDataset';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 import { checkAllergens } from '@/services/allergyCheck';
-import { AlertTriangle, Star, Loader2 } from 'lucide-react';
+import { AlertTriangle, Star, Loader2, ShoppingCart, X } from 'lucide-react';
+import { extractPriceValue } from '@/utils/recommendations';
 
 interface ResultsTabProps {
     scannedItems: ScannedItem[];
@@ -41,6 +42,26 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
     const [isResolving, setIsResolving] = useState(false);
+    const [orderItems, setOrderItems] = useState<Set<string>>(() => {
+        try {
+            const stored = sessionStorage.getItem('orderItems');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) return new Set(parsed);
+            }
+        } catch {}
+        return new Set();
+    });
+
+    useEffect(() => {
+        sessionStorage.setItem('orderItems', JSON.stringify([...orderItems]));
+    }, [orderItems]);
+
+    useEffect(() => {
+        if (scannedItems.length === 0) {
+            setOrderItems(new Set());
+        }
+    }, [scannedItems]);
 
     const dishIds = resolvedItems.map(item => item.datasetId || item.name).filter(Boolean);
     const dishAverageRatings = useDishAverageRatings(dishIds);
@@ -67,6 +88,31 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
         loadResolvedItems();
         return () => { cancelled = true; };
     }, [scannedItems]);
+
+    const toggleOrder = (itemName: string) => {
+        setOrderItems(prev => {
+            const next = new Set(prev);
+            if (next.has(itemName)) {
+                next.delete(itemName);
+            } else {
+                next.add(itemName);
+            }
+            return next;
+        });
+    };
+
+    const orderTotal = React.useMemo(() => {
+        let total = 0;
+        resolvedItems.forEach(item => {
+            const itemName = item?.name || '';
+            if (orderItems.has(itemName)) {
+                total += extractPriceValue(item.price || '0');
+            }
+        });
+        return total;
+    }, [resolvedItems, orderItems]);
+
+    const orderItemsCount = orderItems.size;
 
     const unsafeCount = userAllergens.length > 0
         ? resolvedItems.filter(item => !checkAllergens(item, userAllergens).isSafe).length
@@ -95,6 +141,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     const userRating = dishRatings[ratingKey]?.rating || 0;
                     const avgRating = dishAverageRatings[item?.datasetId || itemName];
                     const inMealLog = isDishInMealLog ? isDishInMealLog(itemName) : false;
+                    const inOrder = orderItems.has(itemName);
                     const allergyInfo = checkAllergens(item, userAllergens);
                     return (
                         <MenuCard
@@ -106,6 +153,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                             onLocationClick={onLocationClick ? () => onLocationClick(item as Dish) : undefined}
                             onAddToMealLog={onAddToMealLog ? () => onAddToMealLog(item) : undefined}
                             isInMealLog={inMealLog}
+                            onAddToOrder={() => toggleOrder(itemName)}
+                            isInOrder={inOrder}
                             allergyInfo={allergyInfo}
                             rating={userRating}
                             averageRating={avgRating?.averageRating}
@@ -114,6 +163,38 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     );
                 })}
             </div>
+            {orderItemsCount > 0 && (
+                <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl shadow-lg">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
+                                <ShoppingCart className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-gray-900">Order Items</p>
+                                <p className="text-xs text-gray-500">{orderItemsCount} item{orderItemsCount !== 1 ? 's' : ''} in order</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-xs uppercase tracking-wider text-gray-400 font-semibold">Total Price</p>
+                            <p className="text-2xl font-bold text-amber-600">Rs. {orderTotal}</p>
+                        </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                        {resolvedItems.filter(item => orderItems.has(item?.name || '')).map((item, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 text-xs bg-white border border-amber-200 text-amber-700 px-2.5 py-1 rounded-full shadow-sm">
+                                {item.name}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); toggleOrder(item.name); }}
+                                    className="hover:text-red-500 transition-colors"
+                                >
+                                    <X size={12} />
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            )}
             {restaurantPlace && onRateRestaurant && (
                 <Button 
                     onClick={() => onRateRestaurant(restaurantPlace, restaurantLocation || '')}

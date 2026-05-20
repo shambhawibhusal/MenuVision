@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
-import { Heart, MapPin, Clock, UtensilsCrossed, Check, Eye, AlertTriangle, Leaf } from 'lucide-react';
+import { Heart, MapPin, Clock, UtensilsCrossed, Check, Eye, AlertTriangle, Leaf, ShoppingCart } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
 import { normalizePrice, formatPriceRange } from '@/utils/recommendations';
@@ -21,6 +21,8 @@ interface MenuCardProps {
     onLocationClick?: () => void;
     onAddToMealLog?: () => void;
     isInMealLog?: boolean;
+    onAddToOrder?: () => void;
+    isInOrder?: boolean;
     viewCount?: number;
     rating?: number;
     averageRating?: number;
@@ -30,7 +32,7 @@ interface MenuCardProps {
     showHealthierBadge?: boolean;
 }
 
-const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, onLocationClick, onAddToMealLog, isInMealLog = false, viewCount = 0, rating = 0, averageRating = 0, totalReviews = 0, userAllergens = [], allergyInfo, showHealthierBadge = false }) => {
+const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, onLocationClick, onAddToMealLog, isInMealLog = false, onAddToOrder, isInOrder = false, viewCount = 0, rating = 0, averageRating = 0, totalReviews = 0, userAllergens = [], allergyInfo, showHealthierBadge = false }) => {
     const computedAllergyInfo = allergyInfo || (userAllergens.length > 0 ? checkAllergens(item, userAllergens) : null);
     const isAllergenSafe = computedAllergyInfo?.isSafe ?? true;
     const hasAllergenWarning = !isAllergenSafe;
@@ -155,6 +157,14 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                                 onClick={(e) => { e.stopPropagation(); onAddToMealLog(); }}
                             >
                                 {isInMealLog ? <><Check size={12} className="inline mr-1" />Added</> : <><UtensilsCrossed size={12} className="inline mr-1" />Add</>}
+                            </button>
+                        )}
+                        {onAddToOrder && (
+                            <button
+                                className={`text-xs px-2 py-1 rounded-full border transition-colors font-medium ${isInOrder ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600 hover:border-amber-600' : 'bg-white text-amber-600 border-amber-300 hover:bg-amber-50 hover:border-amber-400'}`}
+                                onClick={(e) => { e.stopPropagation(); onAddToOrder(); }}
+                            >
+                                {isInOrder ? <><Check size={12} className="inline mr-1" />In Order</> : <><ShoppingCart size={12} className="inline mr-1" />Add to Order</>}
                             </button>
                         )}
                         {showHealthierBadge && (item.isVegetarian || item.isVegan || item.isGlutenFree) && (
