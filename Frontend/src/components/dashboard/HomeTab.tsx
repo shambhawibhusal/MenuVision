@@ -19,7 +19,6 @@ interface DishAverageRating {
 
 interface DishPopularity {
     dishId: string;
-    scanCount: number;
     viewCount: number;
 }
 
@@ -66,6 +65,7 @@ interface HomeTabProps {
     onNavigateToMealLog?: () => void;
     mealLogEntries?: MealLogEntry[];
     nutritionGoals?: NutritionGoals | null;
+    recommendationsLoading?: boolean;
 }
 
 const SORT_OPTIONS = [
@@ -101,6 +101,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     onNavigateToMealLog,
     mealLogEntries = [],
     nutritionGoals = null,
+    recommendationsLoading = false,
 }) => {
     const [showFilters, setShowFilters] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -574,7 +575,26 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </h3>
             </div>
 
-            {searchText.trim() && groupedDishes.length > 0 ? (
+            {!searchText.trim() && recommendationsLoading ? (
+                <div className="flex flex-col gap-4">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="rounded-2xl bg-white border border-gray-100 p-4 shadow-sm animate-pulse">
+                            <div className="flex gap-4">
+                                <div className="w-20 h-20 bg-gray-200 rounded-xl shrink-0" />
+                                <div className="flex-1 space-y-2.5">
+                                    <div className="h-4 bg-gray-200 rounded w-3/4" />
+                                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                                    <div className="h-3 bg-gray-100 rounded w-2/3" />
+                                    <div className="flex gap-2">
+                                        <div className="h-5 w-14 bg-gray-100 rounded-full" />
+                                        <div className="h-5 w-12 bg-gray-100 rounded-full" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : searchText.trim() && groupedDishes.length > 0 ? (
                 <div className="flex flex-col gap-4">
                     {unsafeGroupedCount > 0 && (
                         <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm font-medium text-red-700">
@@ -621,7 +641,6 @@ const HomeTab: React.FC<HomeTabProps> = ({
                                 onLocationClick={() => onLocationClick?.(dish)}
                                 onAddToMealLog={onAddToMealLog ? () => onAddToMealLog(dish) : undefined}
                                 isInMealLog={inMealLog}
-                                scanCount={popularity?.scanCount}
                                 viewCount={popularity?.viewCount}
                                 rating={userRating}
                                 averageRating={avgRating?.averageRating}

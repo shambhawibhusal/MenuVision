@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { ChatMessage } from '@/types/dashboard';
+import { ChatMessage, ChatSession } from '@/types/dashboard';
 import { auth, db } from '../firebase';
 import { doc, getDoc, updateDoc, arrayUnion, arrayRemove, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
@@ -21,6 +21,7 @@ import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat
 import { Card, CardContent } from "@/components/ui/card";
 
 import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating, MealType } from '@/types/dashboard';
+import { formatPriceRange } from '@/utils/recommendations';
 
 import { useDishes } from '@/hooks/useDishes';
 import { useGloballyLikedDishes } from '@/hooks/useGloballyLikedDishes';
@@ -39,6 +40,15 @@ import { checkDishInDataset, addDishToDataset, incrementScanCount, resolveScanne
 import { incrementRestaurantScanCount } from '../services/restaurants';
 import { addRestaurantReview } from '../services/restaurants';
 import { getHealthierAlternatives, checkAllergens, formatAllergenLabels } from '../services/allergyCheck';
+import {
+    createChatSession,
+    getChatSessions,
+    getChatMessages,
+    saveChatMessage,
+    updateSessionAfterMessage,
+    setSessionTitle,
+    deleteChatSession,
+} from '../services/chatSessions';
 
 // Components
 import HomeTab from '@/components/dashboard/HomeTab';
@@ -51,6 +61,7 @@ import NavIcon from '@/components/dashboard/NavIcon';
 import StarRating from '@/components/ui/StarRating';
 import { LocationMap } from '@/components/dashboard/LocationMap';
 import ImagePreviewModal from '@/components/ui/ImagePreviewModal';
+import ChatSidebar from '@/components/dashboard/ChatSidebar';
 
 interface DashboardProps {
     onLogout: () => void;
@@ -59,7 +70,10 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const { dishes: allDishes, loading: dishesLoading } = useDishes();
     const { globallyLikedDishes } = useGloballyLikedDishes();
-    const [activeTab, setActiveTab] = useState<Tab>('home');
+    const [activeTab, setActiveTab] = useState<Tab>(() => {
+        const saved = sessionStorage.getItem('activeTab');
+        return (saved as Tab) || 'home';
+    });
     const [showScanOptions, setShowScanOptions] = useState(false);
     const [capturedImage, setCapturedImage] = useState<string | null>(null);
     const [imageBlob, setImageBlob] = useState<Blob | null>(null);
@@ -68,6 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
     const [unlikedDishIds, setUnlikedDishIds] = useState<number[]>([]);
+    const [scannedItemLikes, setScannedItemLikes] = useState<Set<string>>(new Set());
     const [phoneNumber, setPhoneNumber] = useState('');
     const [restaurantName, setRestaurantName] = useState('');
     const [restaurantLocation, setRestaurantLocation] = useState('');
@@ -98,12 +113,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const [showRestaurantReviewsModal, setShowRestaurantReviewsModal] = useState(false);
     const [resolvedRecommendedDishes, setResolvedRecommendedDishes] = useState<Dish[]>([]);
+    const [recommendationsLoading, setRecommendationsLoading] = useState(true);
     const [resolvedSearchableDishes, setResolvedSearchableDishes] = useState<Dish[]>([]);
     const [selectedLocationDish, setSelectedLocationDish] = useState<Dish | null>(null);
     const [selectedMealType, setSelectedMealType] = useState<MealType>('lunch');
+    const [openGoalsEditor, setOpenGoalsEditor] = useState(false);
 
     const { reviews: currentDishReviews, averageRating: currentAvgRating, totalReviews: currentTotalReviews } = useDishReviews(currentDishFirestoreId);
-    
+
     const { addToLog, isInLog: isDishInMealLog, todayLog } = useMealLog();
     const { goals: nutritionGoals, bodyMetrics, goalsLoading, saveGoals, saveMetrics } = useNutritionGoals();
     const { toasts, showToast, removeToast } = useToast();
@@ -111,7 +128,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const dishIds = useMemo(() => allDishes.map(d => d.datasetId || String(d.id)), [allDishes]);
     const dishAverageRatings = useDishAverageRatings(dishIds);
-    const { popularityMap } = useDishPopularity(dishIds);
+    const { popularityMap, trackView } = useDishPopularity(dishIds);
 
     React.useEffect(() => {
         const fetchUserData = async () => {
@@ -124,7 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 if (userDoc.exists()) {
                     const data = userDoc.data();
                     setFavoriteItems(data.favorites || []);
-                    
+
                     // Migrate old history items to add sortDate
                     const history = (data.history || []).map((item: HistoryItem) => {
                         if (!item.sortDate) {
@@ -182,6 +199,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         fetchUserData();
     }, []);
 
+    useEffect(() => {
+        if (activeTab === 'chat' && auth.currentUser && !chatLoadedRef.current) {
+            chatLoadedRef.current = true;
+            loadChatSessions();
+        }
+    }, [activeTab]);
+
+    useEffect(() => {
+        sessionStorage.setItem('activeTab', activeTab);
+    }, [activeTab]);
+
     const toggleRecommendedLike = async (dish: Dish) => {
         if (!auth.currentUser) return;
 
@@ -214,25 +242,39 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const toggleScannedItemLike = async (item: ScannedItem) => {
         if (!auth.currentUser) return;
 
-        const existingFav = favoriteItems.find(fav => fav.name === item.name);
+        const isSessionLiked = scannedItemLikes.has(item.name);
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
 
         try {
-            if (existingFav) {
-                setFavoriteItems(prev => prev.filter(fav => fav.name !== item.name));
-                if (existingFav.id) {
-                    setUnlikedDishIds(prev => [...prev, existingFav.id]);
-                    await updateDoc(userDocRef, {
-                        favorites: arrayRemove(existingFav),
-                        unliked: arrayUnion(existingFav.id)
-                    });
-                } else {
-                    await updateDoc(userDocRef, {
-                        favorites: arrayRemove(existingFav)
-                    });
+            if (isSessionLiked) {
+                setScannedItemLikes(prev => {
+                    const next = new Set(prev);
+                    next.delete(item.name);
+                    return next;
+                });
+
+                const existingFav = favoriteItems.find(fav => fav.name === item.name);
+                if (existingFav) {
+                    setFavoriteItems(prev => prev.filter(fav => fav.name !== item.name));
+                    if (existingFav.id) {
+                        setUnlikedDishIds(prev => [...prev, existingFav.id]);
+                        await updateDoc(userDocRef, {
+                            favorites: arrayRemove(existingFav),
+                            unliked: arrayUnion(existingFav.id)
+                        });
+                    } else {
+                        await updateDoc(userDocRef, {
+                            favorites: arrayRemove(existingFav)
+                        });
+                    }
                 }
             } else {
-                // Store minimal data: datasetId + name + price (reference-based)
+                setScannedItemLikes(prev => {
+                    const next = new Set(prev);
+                    next.add(item.name);
+                    return next;
+                });
+
                 const newDish: Dish = {
                     id: Date.now(),
                     datasetId: item.datasetId,
@@ -294,9 +336,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 ...dishRatings,
                 [ratingKey]: localReviewData
             };
-            
+
             setDishRatings(newDishRatings);
-            
+
             const userDocRef = doc(db, 'users', auth.currentUser.uid);
             await updateDoc(userDocRef, { dishRatings: newDishRatings });
 
@@ -337,18 +379,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     // -- Data States
     const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
-    const [fullText, setFullText] = useState('');
-    const [viewMode, setViewMode] = useState<'items' | 'text'>('items');
     const [selectedDish, setSelectedDish] = useState<ScannedItem | null>(null);
-    const restaurantIdForModal = selectedDish?.place && selectedDish.place !== 'Scanned Menu' 
-        ? `${selectedDish.place}_${selectedDish.location || ''}` 
+    const restaurantIdForModal = selectedDish?.place && selectedDish.place !== 'Scanned Menu'
+        ? `${selectedDish.place}_${selectedDish.location || ''}`
         : '';
     const restaurantData = useRestaurantReviews(restaurantIdForModal || null);
     const restaurantReviews = restaurantData?.reviews ?? [];
     const restaurantAvgRating = restaurantData?.averageRating ?? 0;
     const restaurantTotalReviews = restaurantData?.totalReviews ?? 0;
     const restaurantReviewsLoading = restaurantData?.loading ?? false;
-    
+
     const [previewImage, setPreviewImage] = useState<{ url: string; alt: string } | null>(null);
 
     useEffect(() => {
@@ -468,10 +508,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             }
 
             const { latitude, longitude } = position.coords;
-            
+
             // Save coordinates to state for use when saving scanned items
             setUserLocation({ lat: latitude, lng: longitude, city: '' });
-            
+
             const res = await fetch(
                 `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`,
                 { headers: { 'User-Agent': 'MenuVision/1.0' } }
@@ -487,7 +527,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 addressParts.push(data.address.city || data.address.town || data.address.village);
             }
             if (data.address?.country) addressParts.push(data.address.country);
-            
+
             if (addressParts.length > 0) {
                 setRestaurantLocation(addressParts.join(', '));
             } else {
@@ -514,11 +554,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         try {
             const res = await fetch(
                 `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1&accept-language=en`,
-                { 
-                    headers: { 
+                {
+                    headers: {
                         'User-Agent': 'MenuVision/1.0',
                         'Referer': 'https://menuvision.app'
-                    } 
+                    }
                 }
             );
             if (!res.ok) return null;
@@ -533,10 +573,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     };
 
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-        { id: 1, text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
+        { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
     ]);
     const [chatInput, setChatInput] = useState('');
     const [chatLoading, setChatLoading] = useState(false);
+    const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
+    const chatLoadedRef = useRef(false);
 
     const recommendedDishes = useMemo(() => {
         console.log('Computing recommendations:', {
@@ -554,11 +598,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     React.useEffect(() => {
         const loadResolvedRecommendations = async () => {
             if (recommendedDishes.length > 0) {
+                setRecommendationsLoading(true);
                 const resolved = await resolveScannedItems(recommendedDishes as ScannedItem[]) as Dish[];
                 setResolvedRecommendedDishes(resolved);
             } else {
                 setResolvedRecommendedDishes([]);
             }
+            setRecommendationsLoading(false);
         };
         loadResolvedRecommendations();
     }, [recommendedDishes]);
@@ -614,92 +660,92 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         let results = baseList;
 
         results = results.filter(dish => {
-        const matchesVegetarian = !activeFilters.isVegetarian || dish.isVegetarian;
-        const matchesVegan = !activeFilters.isVegan || dish.isVegan;
-        const matchesGlutenFree = !activeFilters.isGlutenFree || dish.isGlutenFree;
-        
-        const budgetValue = dish.priceRange || getPriceRange(dish.price);
-        const matchesBudget = activeFilters.budget.length === 0 || 
-            activeFilters.budget.includes(budgetValue);
-        
-        const cuisineValue = dish.cuisine || dish.origin;
-        const matchesCuisine = activeFilters.cuisine.length === 0 || 
-            (cuisineValue && activeFilters.cuisine.some(c => {
-                const cv = cuisineValue.toLowerCase();
-                if (c.toLowerCase() === 'nepali') {
-                    return cv.includes('nepal') || cv.includes('nepali') || cv.includes('newari') || cv.includes('thakali');
+            const matchesVegetarian = !activeFilters.isVegetarian || dish.isVegetarian;
+            const matchesVegan = !activeFilters.isVegan || dish.isVegan;
+            const matchesGlutenFree = !activeFilters.isGlutenFree || dish.isGlutenFree;
+
+            const budgetValue = dish.priceRange || getPriceRange(dish.price);
+            const matchesBudget = activeFilters.budget.length === 0 ||
+                activeFilters.budget.includes(budgetValue);
+
+            const cuisineValue = dish.cuisine || dish.origin;
+            const matchesCuisine = activeFilters.cuisine.length === 0 ||
+                (cuisineValue && activeFilters.cuisine.some(c => {
+                    const cv = cuisineValue.toLowerCase();
+                    if (c.toLowerCase() === 'nepali') {
+                        return cv.includes('nepal') || cv.includes('nepali') || cv.includes('newari') || cv.includes('thakali');
+                    }
+                    return cv.includes(c.toLowerCase());
+                }));
+
+            const matchesPrepTime = activeFilters.prepTime.length === 0 ||
+                (!dish.prepTime ? false : activeFilters.prepTime.some(pt => {
+                    const prepStr = String(dish.prepTime || '');
+                    const prepMins = parseInt(prepStr.split('-')[0].replace(/\D/g, '') || '0');
+                    if (pt === 'under15') return prepMins > 0 && prepMins < 15;
+                    if (pt === 'under30') return prepMins > 0 && prepMins < 30;
+                    return true;
+                }));
+
+            let matchesLocation = true;
+            const KATHMANDU_CENTER = { lat: 27.7172, lng: 85.3240 };
+
+            if (activeFilters.location === 'kathmandu') {
+                const loc = (dish.location || '').toLowerCase();
+                matchesLocation = !!dish.location && (loc.includes('kathmandu') || loc.includes('ktm'));
+            } else if (activeFilters.location === 'nearby') {
+                if (dish.latitude != null && dish.longitude != null && userLocation) {
+                    const R = 6371;
+                    const dLat = (dish.latitude - userLocation.lat) * Math.PI / 180;
+                    const dLng = (dish.longitude - userLocation.lng) * Math.PI / 180;
+                    const a = Math.sin(dLat / 2) ** 2 +
+                        Math.cos(userLocation.lat * Math.PI / 180) * Math.cos(dish.latitude * Math.PI / 180) *
+                        Math.sin(dLng / 2) ** 2;
+                    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    matchesLocation = dist <= 2;
+                } else if (userLocation?.city) {
+                    const loc = (dish.location || '').toLowerCase();
+                    const city = userLocation.city.toLowerCase();
+                    matchesLocation = loc.includes(city);
+                } else {
+                    matchesLocation = !locationLoading;
                 }
-                return cv.includes(c.toLowerCase());
-            }));
-        
-        const matchesPrepTime = activeFilters.prepTime.length === 0 || 
-            (!dish.prepTime ? false : activeFilters.prepTime.some(pt => {
-                const prepStr = String(dish.prepTime || '');
-                const prepMins = parseInt(prepStr.split('-')[0].replace(/\D/g, '') || '0');
-                if (pt === 'under15') return prepMins > 0 && prepMins < 15;
-                if (pt === 'under30') return prepMins > 0 && prepMins < 30;
-                return true;
-            }));
-
-        let matchesLocation = true;
-        const KATHMANDU_CENTER = { lat: 27.7172, lng: 85.3240 };
-        
-        if (activeFilters.location === 'kathmandu') {
-            const loc = (dish.location || '').toLowerCase();
-            matchesLocation = !!dish.location && (loc.includes('kathmandu') || loc.includes('ktm'));
-        } else if (activeFilters.location === 'nearby') {
-            if (dish.latitude != null && dish.longitude != null && userLocation) {
-                const R = 6371;
-                const dLat = (dish.latitude - userLocation.lat) * Math.PI / 180;
-                const dLng = (dish.longitude - userLocation.lng) * Math.PI / 180;
-                const a = Math.sin(dLat / 2) ** 2 +
-                    Math.cos(userLocation.lat * Math.PI / 180) * Math.cos(dish.latitude * Math.PI / 180) *
-                    Math.sin(dLng / 2) ** 2;
-                const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                matchesLocation = dist <= 2;
-            } else if (userLocation?.city) {
-                const loc = (dish.location || '').toLowerCase();
-                const city = userLocation.city.toLowerCase();
-                matchesLocation = loc.includes(city);
-            } else {
-                matchesLocation = !locationLoading;
+            } else if (activeFilters.location === 'within2km') {
+                if (dish.latitude != null && dish.longitude != null) {
+                    const R = 6371;
+                    const dLat = (dish.latitude - KATHMANDU_CENTER.lat) * Math.PI / 180;
+                    const dLng = (dish.longitude - KATHMANDU_CENTER.lng) * Math.PI / 180;
+                    const a = Math.sin(dLat / 2) ** 2 +
+                        Math.cos(KATHMANDU_CENTER.lat * Math.PI / 180) * Math.cos(dish.latitude * Math.PI / 180) *
+                        Math.sin(dLng / 2) ** 2;
+                    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                    matchesLocation = dist <= 2;
+                } else {
+                    const loc = (dish.location || '').toLowerCase();
+                    matchesLocation = loc.includes('kathmandu') || loc.includes('ktm');
+                }
             }
-        } else if (activeFilters.location === 'within2km') {
-            if (dish.latitude != null && dish.longitude != null) {
-                const R = 6371;
-                const dLat = (dish.latitude - KATHMANDU_CENTER.lat) * Math.PI / 180;
-                const dLng = (dish.longitude - KATHMANDU_CENTER.lng) * Math.PI / 180;
-                const a = Math.sin(dLat / 2) ** 2 +
-                    Math.cos(KATHMANDU_CENTER.lat * Math.PI / 180) * Math.cos(dish.latitude * Math.PI / 180) *
-                    Math.sin(dLng / 2) ** 2;
-                const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                matchesLocation = dist <= 2;
-            } else {
-                const loc = (dish.location || '').toLowerCase();
-                matchesLocation = loc.includes('kathmandu') || loc.includes('ktm');
-            }
-        }
 
-        let matchesRating = true;
-        if (activeFilters.rating) {
-            const normalizedName = (dish.name || '').toLowerCase().trim();
-            const ratingKey = `dish_${normalizedName}`;
-            
-            const localRating = dishRatings[ratingKey];
-            const ratingKey2 = dish.datasetId || String(dish.id);
-            const fetchedData = dishAverageRatings?.[ratingKey2];
-            const avgRating = localRating?.rating || fetchedData?.averageRating || 0;
-            
-            if (activeFilters.rating === 'rated') {
-                const hasRating = !!localRating || (fetchedData?.totalReviews || 0) > 0 || avgRating > 0;
-                matchesRating = hasRating;
-            } else {
-                const minRating = parseFloat(activeFilters.rating);
-                matchesRating = avgRating >= minRating;
-            }
-        }
+            let matchesRating = true;
+            if (activeFilters.rating) {
+                const normalizedName = (dish.name || '').toLowerCase().trim();
+                const ratingKey = `dish_${normalizedName}`;
 
-        return matchesVegetarian && matchesVegan && matchesGlutenFree && matchesBudget && matchesCuisine && matchesPrepTime && matchesLocation && matchesRating;
+                const localRating = dishRatings[ratingKey];
+                const ratingKey2 = dish.datasetId || String(dish.id);
+                const fetchedData = dishAverageRatings?.[ratingKey2];
+                const avgRating = localRating?.rating || fetchedData?.averageRating || 0;
+
+                if (activeFilters.rating === 'rated') {
+                    const hasRating = !!localRating || (fetchedData?.totalReviews || 0) > 0 || avgRating > 0;
+                    matchesRating = hasRating;
+                } else {
+                    const minRating = parseFloat(activeFilters.rating);
+                    matchesRating = avgRating >= minRating;
+                }
+            }
+
+            return matchesVegetarian && matchesVegan && matchesGlutenFree && matchesBudget && matchesCuisine && matchesPrepTime && matchesLocation && matchesRating;
         });
 
         if (sortBy === 'price-low') {
@@ -751,16 +797,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const groupedDishes = useMemo(() => {
         if (!debouncedSearch.trim() && filteredDishes.length === 0) return [];
         const dishesToGroup = debouncedSearch.trim() ? filteredDishes : searchableDishes;
-        
+
         if (debouncedSearch.trim()) {
             const places = new Set(dishesToGroup.map(d => d.place?.toLowerCase().trim()).filter(Boolean));
             const hasMultipleDishesFromSamePlace = dishesToGroup.length > 1 && places.size < dishesToGroup.length;
-            
+
             if (hasMultipleDishesFromSamePlace) {
                 return groupDishesByRestaurant(dishesToGroup as Dish[]);
             }
         }
-        
+
         return groupDishesByName(dishesToGroup as Dish[]);
     }, [filteredDishes, searchableDishes, debouncedSearch]);
 
@@ -825,7 +871,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             // 0. Geocode manually entered location if needed
             let locationLat = userLocation?.lat;
             let locationLng = userLocation?.lng;
-            
+
             if (restaurantLocation && restaurantLocation.trim().length > 0) {
                 const coords = await geocodeAddress(restaurantLocation);
                 if (coords) {
@@ -866,13 +912,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
             // Process items with dataset lookup
             const processedItems: ScannedItem[] = [];
-            
+
             for (const item of (data.menuItems || [])) {
                 console.log(`[Dataset] Processing dish: "${item.name}"`);
-                
+
                 // 1. Check dataset first
                 let datasetItem = await checkDishInDataset(item.name);
-                
+
                 let datasetId: string;
                 if (datasetItem) {
                     // Exists - use reference, increment count
@@ -901,7 +947,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     }) || '';
                     console.log(`[Dataset] Added to dataset with ID: ${datasetId}`);
                 }
-                
+
                 // 2. Store minimal data: datasetId + name + price (no image duplication)
                 processedItems.push({
                     datasetId,
@@ -914,21 +960,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     nutrition: item.nutrition
                 });
             }
-            
+
             const items = processedItems;
-            const extractedText = data.fullText || "";
 
             if (items.length > 0) {
-                const sanitizedItems = items.map((item: ScannedItem) => 
+                const sanitizedItems = items.map((item: ScannedItem) =>
                     Object.fromEntries(
                         Object.entries(item).filter(([_, v]) => v !== undefined)
                     )
                 ) as ScannedItem[];
-                
+
                 const now = new Date();
-                    const sortDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-                    
-                    const newHistoryItem: HistoryItem = {
+                const sortDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+                const newHistoryItem: HistoryItem = {
                     id: Date.now(),
                     place: restaurantName || 'Scanned Menu',
                     location: restaurantLocation || '',
@@ -944,13 +989,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 // Persist to Firestore
                 if (auth.currentUser) {
                     const userDocRef = doc(db, 'users', auth.currentUser.uid);
-                    
+
                     // Increment restaurant scan count
                     if (restaurantName) {
                         const restaurantId = `${restaurantName}_${restaurantLocation || ''}`;
                         await incrementRestaurantScanCount(restaurantId);
                     }
-                    
+
                     await updateDoc(userDocRef, {
                         history: arrayUnion(newHistoryItem)
                     }).catch(async (error) => {
@@ -963,18 +1008,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     });
                 }
 
-                setFullText(extractedText);
                 setScannedItems(items);
+                setScannedItemLikes(new Set());
                 setCapturedImage(null);
                 setRestaurantName('');
                 setRestaurantLocation('');
                 setActiveTab("results");
-                setViewMode('items');
             } else {
                 alert("No menu items found. Please try again.");
-                setFullText(extractedText);
                 setActiveTab("results");
-                setViewMode('text');
             }
 
         } catch (err: any) {
@@ -1047,14 +1089,95 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         }
     };
 
+    const loadChatSessions = async () => {
+        if (!auth.currentUser) return;
+        const sessions = await getChatSessions(auth.currentUser.uid);
+        setChatSessions(sessions);
+        if (sessions.length > 0 && !activeSessionId) {
+            const mostRecent = sessions[0];
+            setActiveSessionId(mostRecent.id);
+
+            const msgs = await getChatMessages(mostRecent.id);
+            setChatMessages(msgs.length > 0 ? msgs : [
+                { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
+            ]);
+
+        }
+    };
+
+    const createNewSession = async () => {
+        if (!auth.currentUser) return;
+        const session = await createChatSession(auth.currentUser.uid);
+        if (session) {
+            setChatSessions(prev => [session, ...prev]);
+            setActiveSessionId(session.id);
+            setChatMessages([
+                { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
+            ]);
+        }
+    };
+
+    const switchToSession = async (sessionId: string) => {
+        setActiveSessionId(sessionId);
+
+        const msgs = await getChatMessages(sessionId);
+        setChatMessages(msgs.length > 0 ? msgs : [
+            { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
+        ]);
+
+    };
+
+    const renameSession = async (sessionId: string, title: string) => {
+        await setSessionTitle(sessionId, title);
+        setChatSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title } : s));
+    };
+
+    const deleteSession = async (sessionId: string) => {
+        await deleteChatSession(sessionId);
+        setChatSessions(prev => prev.filter(s => s.id !== sessionId));
+        if (activeSessionId === sessionId) {
+            const remaining = chatSessions.filter(s => s.id !== sessionId);
+            if (remaining.length > 0) {
+                await switchToSession(remaining[0].id);
+            } else {
+                setActiveSessionId(null);
+                setChatMessages([
+                    { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
+                ]);
+            }
+        }
+    };
+
     const sendMessage = async () => {
         const trimmed = chatInput.trim();
         if (!trimmed || chatLoading) return;
 
-        const userMsg: ChatMessage = { id: Date.now(), text: trimmed, sender: 'user' };
+        let sessionId = activeSessionId;
+        if (!sessionId && auth.currentUser) {
+            const title = trimmed.length > 40 ? trimmed.substring(0, 40) + '...' : trimmed;
+            const session = await createChatSession(auth.currentUser.uid, title);
+            if (session) {
+                sessionId = session.id;
+                setActiveSessionId(session.id);
+                setChatSessions(prev => [session, ...prev]);
+            }
+        }
+
+        const userMsg: ChatMessage = { id: Date.now().toString(), text: trimmed, sender: 'user' };
         setChatMessages(prev => [...prev, userMsg]);
         setChatInput('');
         setChatLoading(true);
+
+        if (sessionId) {
+            saveChatMessage(sessionId, userMsg);
+            updateSessionAfterMessage(sessionId, trimmed);
+            setChatSessions(prev => prev.map(s => s.id === sessionId ? {
+                ...s,
+                lastMessage: trimmed.substring(0, 120),
+                updatedAt: new Date(),
+                messageCount: s.messageCount + 1,
+            } : s));
+        }
 
         try {
             const response = await fetch('/api/chat', {
@@ -1096,6 +1219,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         name: dish.name,
                         description: dish.description,
                         price: dish.price,
+                        priceMin: dish.priceMin,
+                        priceMax: dish.priceMax,
                         category: dish.category,
                         ingredients: dish.ingredients || [],
                         allergens: dish.allergens || [],
@@ -1112,15 +1237,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             );
 
             const botMsg: ChatMessage = {
-                id: Date.now() + 1,
+                id: (Date.now() + 1).toString(),
                 text: replyText,
                 sender: 'bot',
                 dishes: scannedDishes,
             };
             setChatMessages(prev => [...prev, botMsg]);
+
+            if (sessionId) {
+                saveChatMessage(sessionId, botMsg);
+                updateSessionAfterMessage(sessionId, replyText);
+                setChatSessions(prev => prev.map(s => s.id === sessionId ? {
+                    ...s,
+                    lastMessage: replyText.substring(0, 120),
+                    updatedAt: new Date(),
+                    messageCount: s.messageCount + 1,
+                } : s));
+            }
         } catch {
-            const botMsg: ChatMessage = { id: Date.now() + 1, text: 'Sorry, there was an error connecting to the AI.', sender: 'bot' };
+            const botMsg: ChatMessage = { id: (Date.now() + 1).toString(), text: 'Sorry, there was an error connecting to the AI.', sender: 'bot' };
             setChatMessages(prev => [...prev, botMsg]);
+
+            if (sessionId) {
+                saveChatMessage(sessionId, botMsg);
+                updateSessionAfterMessage(sessionId, botMsg.text);
+            }
         } finally {
             setChatLoading(false);
         }
@@ -1217,7 +1358,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     <div className="absolute inset-0 bg-white/80 z-[200] flex items-center justify-center">
                         <div className="text-center">
                             <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                            <p className="text-gray-600 font-medium">Loading dishes...</p>
+                            <p className="text-gray-600 font-medium">Loading...</p>
                         </div>
                     </div>
                 )}
@@ -1231,7 +1372,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             groupedDishes={groupedDishes}
                             favoriteItems={favoriteItems}
                             toggleRecommendedLike={toggleRecommendedLike}
-                            onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)}
+                            onSelectDish={(dish) => {
+                                if (dish.datasetId) trackView(dish.datasetId);
+                                setSelectedDish(dish as ScannedItem);
+                            }}
                             onAddToMealLog={(dish) => {
                                 if (!isDishInMealLog(dish?.name || '')) {
                                     addToLog(dish as ScannedItem, selectedMealType);
@@ -1255,17 +1399,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             onNavigateToMealLog={() => setActiveTab('meallog')}
                             mealLogEntries={todayLog?.entries || []}
                             nutritionGoals={nutritionGoals}
+                            recommendationsLoading={recommendationsLoading}
                         />
                     )}
                     {activeTab === 'results' && (
                         <ResultsTab
-                            viewMode={viewMode}
-                            setViewMode={setViewMode}
                             scannedItems={scannedItems}
-                            setSelectedDish={setSelectedDish}
-                            fullText={fullText}
+                            setSelectedDish={(item) => {
+                                if (item.datasetId) trackView(item.datasetId);
+                                setSelectedDish(item);
+                            }}
                             setActiveTab={setActiveTab}
-                            favoriteItems={favoriteItems}
+                            scannedItemLikes={scannedItemLikes}
                             onToggleLike={toggleScannedItemLike}
                             dishRatings={dishRatings}
                             onLocationClick={(dish) => setSelectedLocationDish(dish as Dish)}
@@ -1288,15 +1433,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         />
                     )}
                     {activeTab === 'chat' && (
-                        <ChatTab
-                            chatMessages={chatMessages}
-                            chatInput={chatInput}
-                            setChatInput={setChatInput}
-                            sendMessage={sendMessage}
-                            chatLoading={chatLoading}
-                            onDishClick={(item) => setSelectedDish(item)}
-                            userAllergens={foodProfile.allergens}
-                        />
+                        <>
+                            <ChatSidebar
+                                sessions={chatSessions}
+                                activeSessionId={activeSessionId}
+                                isOpen={chatSidebarOpen}
+                                onClose={() => setChatSidebarOpen(false)}
+                                onNewSession={createNewSession}
+                                onSelectSession={switchToSession}
+                                onRenameSession={renameSession}
+                                onDeleteSession={deleteSession}
+                            />
+                            <ChatTab
+                                chatMessages={chatMessages}
+                                chatInput={chatInput}
+                                setChatInput={setChatInput}
+                                sendMessage={sendMessage}
+                                chatLoading={chatLoading}
+                                onDishClick={(item) => {
+                                    if (item.datasetId) trackView(item.datasetId);
+                                    setSelectedDish(item);
+                                }}
+                                userAllergens={foodProfile.allergens}
+                                onToggleSidebar={() => setChatSidebarOpen(true)}
+                                sessionTitle={chatSessions.find(s => s.id === activeSessionId)?.title || 'MenuVision'}
+                                onRenameSession={(title) => {
+                                    if (activeSessionId) renameSession(activeSessionId, title);
+                                }}
+                                onNewSession={createNewSession}
+                            />
+                        </>
                     )}
                     {activeTab === 'profile' && (
                         <ProfileTab
@@ -1308,7 +1474,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             setShowEditProfile={handleOpenEditProfile}
                             setShowEditFoodProfile={handleOpenEditFoodProfile}
                             onLogout={onLogout}
-                            onNavigateToMealLog={() => setActiveTab('meallog')}
+                            onNavigateToMealLog={() => { setActiveTab('meallog'); setOpenGoalsEditor(true); }}
                         />
                     )}
                     {activeTab === 'history' && (
@@ -1321,21 +1487,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 if (item.scannedItems && item.scannedItems.length > 0) {
                                     const resolved = await resolveScannedItems(item.scannedItems);
                                     setScannedItems(resolved);
+                                    setScannedItemLikes(new Set());
                                     setActiveTab('results');
-                                    setViewMode('items');
-                                    setFullText("");
                                     setSelectedHistoryRestaurant({ place: item.place, location: item.location || '' });
                                 } else {
                                     alert("No detailed items found for this scan.");
                                 }
                             }}
-                            onSelectFavorite={(dish) => setSelectedDish(dish as ScannedItem)}
+                            onSelectFavorite={(dish) => {
+                                if (dish.datasetId) trackView(dish.datasetId);
+                                setSelectedDish(dish as ScannedItem);
+                            }}
                             dishRatings={dishRatings}
                         />
                     )}
                     {activeTab === 'meallog' && (
-                        <MealLogTab 
-                            onSelectDish={(dish) => setSelectedDish(dish as ScannedItem)} 
+                        <MealLogTab
+                            onSelectDish={(dish) => {
+                                if (dish.datasetId) trackView(dish.datasetId);
+                                setSelectedDish(dish as ScannedItem);
+                            }}
                             onShowToast={showToast}
                             selectedMealType={selectedMealType}
                             onMealTypeChange={setSelectedMealType}
@@ -1345,6 +1516,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             saveGoals={saveGoals}
                             saveMetrics={saveMetrics}
                             goalsLoading={goalsLoading}
+                            openGoalsEditor={openGoalsEditor}
+                            onGoalsEditorClosed={() => setOpenGoalsEditor(false)}
                         />
                     )}
                 </main>
@@ -1513,9 +1686,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     <DialogContent showCloseButton={false} className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-none shadow-2xl max-h-[90vh]">
                         <div className="h-32 bg-amber-400 relative shrink-0">
                             {selectedDish?.imageUrl ? (
-                                <img 
-                                    src={selectedDish.imageUrl} 
-                                    alt={selectedDish.name} 
+                                <img
+                                    src={selectedDish.imageUrl}
+                                    alt={selectedDish.name}
                                     className="w-full h-full object-cover cursor-zoom-in"
                                     onClick={() => setPreviewImage({ url: selectedDish.imageUrl, alt: selectedDish.name })}
                                 />
@@ -1548,12 +1721,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     >
                                         <Heart
                                             size={28}
-                                            className={favoriteItems.some(fav => fav.name === selectedDish.name) ? "fill-red-500 text-red-500" : "text-gray-400"}
+                                            className={scannedItemLikes.has(selectedDish?.name || '') ? "fill-red-500 text-red-500" : "text-gray-400"}
                                         />
                                     </Button>
                                 )}
                             </div>
-                            <div className="text-green-600 text-xl font-bold mb-2">{selectedDish?.price}</div>
+                            <div className="text-green-600 text-xl font-bold mb-2">
+                                {selectedDish?.priceMin && selectedDish?.priceMax
+                                    ? formatPriceRange(selectedDish.priceMin, selectedDish.priceMax)
+                                    : selectedDish?.price}
+                            </div>
                             {selectedDish?.place && (
                                 <div className="mb-4">
                                     <div className="text-sm text-gray-500 flex items-center gap-1 mb-2">
@@ -1669,33 +1846,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     const allergyResult = checkAllergens(selectedDish, foodProfile.allergens);
                                     const hasAllergenWarning = !allergyResult.isSafe;
                                     return (
-                                    <>
-                                        <Separator />
-                                        {hasAllergenWarning && (
-                                            <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm font-semibold text-red-700">
-                                                <AlertTriangle size={18} className="shrink-0" />
-                                                This dish contains allergens you've flagged: {formatAllergenLabels(allergyResult.matchingAllergens)}
+                                        <>
+                                            <Separator />
+                                            {hasAllergenWarning && (
+                                                <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-sm font-semibold text-red-700">
+                                                    <AlertTriangle size={18} className="shrink-0" />
+                                                    This dish contains allergens you've flagged: {formatAllergenLabels(allergyResult.matchingAllergens)}
+                                                </div>
+                                            )}
+                                            <div>
+                                                <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Allergens</Label>
+                                                <div className="flex flex-wrap gap-2 mt-2">
+                                                    {selectedDish.allergens.map((allergen, idx) => {
+                                                        const isMatching = hasAllergenWarning && allergyResult.matchingAllergens.some(
+                                                            a => a.toLowerCase() === (allergen || '').toLowerCase()
+                                                        );
+                                                        return (
+                                                            <span key={idx} className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${isMatching ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
+                                                                }`}>
+                                                                {isMatching && <AlertTriangle size={12} />}
+                                                                {allergen}
+                                                            </span>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        )}
-                                        <div>
-                                            <Label className="text-xs uppercase tracking-widest text-gray-400 font-bold">Allergens</Label>
-                                            <div className="flex flex-wrap gap-2 mt-2">
-                                                {selectedDish.allergens.map((allergen, idx) => {
-                                                    const isMatching = hasAllergenWarning && allergyResult.matchingAllergens.some(
-                                                        a => a.toLowerCase() === (allergen || '').toLowerCase()
-                                                    );
-                                                    return (
-                                                        <span key={idx} className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
-                                                            isMatching ? 'bg-red-500 text-white' : 'bg-red-100 text-red-700'
-                                                        }`}>
-                                                            {isMatching && <AlertTriangle size={12} />}
-                                                            {allergen}
-                                                        </span>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    </>
+                                        </>
                                     );
                                 })()}
                                 <Separator />
@@ -1972,9 +2148,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <div className="py-4">
                             <Label className="text-sm font-semibold text-gray-700 mb-2 block">Your Rating</Label>
                             <div className="flex items-center gap-1">
-                                <StarRating 
-                                    rating={restaurantRating} 
-                                    readonly={false} 
+                                <StarRating
+                                    rating={restaurantRating}
+                                    readonly={false}
                                     size={32}
                                     onRatingChange={(rating) => setRestaurantRating(Math.round(rating))}
                                 />
@@ -2001,20 +2177,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         </div>
 
                         <DialogFooter className="flex sm:flex-row gap-2">
-                            <Button 
-                                variant="outline" 
+                            <Button
+                                variant="outline"
                                 onClick={() => {
                                     setShowRestaurantRatingModal(false);
                                     setRestaurantRating(0);
                                     setRestaurantComment('');
                                     setSelectedRestaurantForRating(null);
-                                }} 
-                                disabled={isSavingRestaurantReview} 
+                                }}
+                                disabled={isSavingRestaurantReview}
                                 className="flex-1 h-12 rounded-xl border-gray-200 font-bold"
                             >
                                 Cancel
                             </Button>
-                            <Button 
+                            <Button
                                 onClick={saveRestaurantReview}
                                 disabled={restaurantRating === 0 || isSavingRestaurantReview}
                                 className="flex-1 h-12 rounded-xl bg-amber-400 hover:bg-amber-500 text-black font-bold"
@@ -2076,8 +2252,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             Rate This Restaurant
                         </Button>
 
-                        <Button 
-                            variant="outline" 
+                        <Button
+                            variant="outline"
                             onClick={() => setShowRestaurantReviewsModal(false)}
                             className="w-full h-12 rounded-xl border-gray-200 font-bold"
                         >

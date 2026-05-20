@@ -172,6 +172,8 @@ async function saveDishToDataset(dishData: {
     name: string;
     description?: string | null;
     price?: string | null;
+    priceMin?: string | null;
+    priceMax?: string | null;
     category?: string | null;
     ingredients?: string[];
     allergens?: string[];
@@ -222,6 +224,8 @@ async function saveDishToDataset(dishData: {
             nameLower: normalizedName,
             description: dishData.description || null,
             price: dishData.price || null,
+            priceMin: dishData.priceMin || null,
+            priceMax: dishData.priceMax || null,
             category: dishData.category || null,
             ingredients: dishData.ingredients || [],
             allergens: dishData.allergens || [],
@@ -252,6 +256,8 @@ const FoodItemSchema = z.object({
     name: z.string(),
     description: z.string().nullable(),
     price: z.string().nullable(),
+    priceMin: z.string().nullable().optional(),
+    priceMax: z.string().nullable().optional(),
     category: z.string().nullable(),
     ingredients: z.array(z.string()),
     allergens: z.array(z.string()),
@@ -485,9 +491,14 @@ interface ChatRequestBody {
     message: string;
 }
 
+const ChatFoodItemSchema = FoodItemSchema.extend({
+    priceMin: z.string(),
+    priceMax: z.string(),
+});
+
 const ChatResponseSchema = z.object({
     response: z.string(),
-    dishes: z.array(FoodItemSchema)
+    dishes: z.array(ChatFoodItemSchema)
 });
 
 async function searchMenuDataset(searchTerm: string): Promise<any[]> {
@@ -530,6 +541,26 @@ function extractSearchKeywords(query: string): string[] {
     return [...new Set(keywords)];
 }
 
+function computePriceRange(price: string | null | undefined): { priceMin: string; priceMax: string } {
+    if (price && price !== 'Price not available' && price !== 'N/A') {
+        const match = price.replace(/[^0-9.]/g, '').match(/(\d+\.?\d*)/);
+        if (match) {
+            const value = parseFloat(match[0]);
+            if (value > 0) {
+                const min = Math.round(value * 0.8);
+                const max = Math.round(value * 1.2);
+                return { priceMin: `Rs. ${min}`, priceMax: `Rs. ${max}` };
+            }
+        }
+    }
+    return { priceMin: 'Rs. 150', priceMax: 'Rs. 450' };
+}
+
+function getPriceRangeForDish(dish: any): { priceMin: string; priceMax: string } {
+    if (dish.priceMin && dish.priceMax) return { priceMin: dish.priceMin, priceMax: dish.priceMax };
+    return computePriceRange(dish.price);
+}
+
 app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) => {
     try {
         const { message } = req.body;
@@ -565,22 +596,27 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
                 prompt: `The user asked: "${message}". We found these dishes in our collection: ${dishList}. Write a short conversational reply introducing these dishes to the user.`,
             });
 
-            const formattedDishes = combinedMatches.map(d => ({
-                name: d.name,
-                description: d.description || null,
-                price: d.price || null,
-                category: d.category || null,
-                ingredients: d.ingredients || [],
-                allergens: d.allergens || [],
-                calories: d.calories || null,
-                preparationTime: formatPrepTime(d.preparationTime),
-                origin: d.origin || null,
-                isVegan: d.isVegan ?? null,
-                isVegetarian: d.isVegetarian ?? null,
-                isGlutenFree: d.isGlutenFree ?? null,
-                imageUrl: d.imageUrl || null,
-                nutrition: d.nutrition || { protein: 0, carbohydrates: 0, fat: 0, fiber: 0, sodium: 0 }
-            }));
+            const formattedDishes = combinedMatches.map(d => {
+                const range = getPriceRangeForDish(d);
+                return {
+                    name: d.name,
+                    description: d.description || null,
+                    price: d.price || null,
+                    priceMin: range.priceMin,
+                    priceMax: range.priceMax,
+                    category: d.category || null,
+                    ingredients: d.ingredients || [],
+                    allergens: d.allergens || [],
+                    calories: d.calories || null,
+                    preparationTime: formatPrepTime(d.preparationTime),
+                    origin: d.origin || null,
+                    isVegan: d.isVegan ?? null,
+                    isVegetarian: d.isVegetarian ?? null,
+                    isGlutenFree: d.isGlutenFree ?? null,
+                    imageUrl: d.imageUrl || null,
+                    nutrition: d.nutrition || { protein: 0, carbohydrates: 0, fat: 0, fiber: 0, sodium: 0 }
+                };
+            });
 
             res.json({
                 success: true,
@@ -596,7 +632,7 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         const { object } = await generateObject({
             model: model,
             schema: ChatResponseSchema,
-            system: "You are a friendly and knowledgeable food expert AI assistant. Respond conversationally and helpfully to the user's query about food dishes, cuisines, ingredients, or nutrition. Provide interesting information, cultural context, preparation insights, or recommendations as appropriate. Then include structured dish data for the dishes you mention in your response. All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX'. ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field. If the user's query is not about a specific food dish, you may return an empty dishes array and respond conversationally.",
+            system: "You are a friendly and knowledgeable food expert AI assistant. Respond conversationally and helpfully to the user's query about food dishes, cuisines, ingredients, or nutrition. Provide interesting information, cultural context, preparation insights, or recommendations as appropriate. Then include structured dish data for the dishes you mention in your response. For each dish, provide a realistic estimated market price range using priceMin (lowest typical market price) and priceMax (highest typical market price). All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., price: 'Rs. 250', priceMin: 'Rs. 200', priceMax: 'Rs. 300'). The price field can be used for the typical/average single price. ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field. If the user's query is not about a specific food dish, you may return an empty dishes array and respond conversationally.",
             messages: [
                 { role: "user", content: [{ type: "text", text: message }] },
             ],
@@ -621,10 +657,13 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
                 if (existingDish) {
                     anyFromCache = true;
                     console.log(`[Dataset] Found cached dish: "${dish.name}"`);
+                    const range = getPriceRangeForDish(existingDish);
                     return {
                         name: dish.name,
                         description: existingDish.description,
                         price: existingDish.price,
+                        priceMin: range.priceMin,
+                        priceMax: range.priceMax,
                         category: existingDish.category,
                         ingredients: existingDish.ingredients || [],
                         allergens: existingDish.allergens || [],
@@ -652,6 +691,8 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
                     name: dish.name,
                     description: dish.description,
                     price: dish.price,
+                    priceMin: dish.priceMin,
+                    priceMax: dish.priceMax,
                     category: dish.category,
                     ingredients: dish.ingredients,
                     allergens: dish.allergens,
@@ -665,10 +706,18 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
                     nutrition: normalizedNutrition
                 });
 
+                const range = getPriceRangeForDish({
+                    price: dish.price,
+                    priceMin: dish.priceMin,
+                    priceMax: dish.priceMax
+                });
+
                 return {
                     name: dish.name,
                     description: dish.description,
                     price: dish.price,
+                    priceMin: range.priceMin,
+                    priceMax: range.priceMax,
                     category: dish.category,
                     ingredients: dish.ingredients,
                     allergens: dish.allergens,

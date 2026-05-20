@@ -1,12 +1,11 @@
 import React from 'react';
 import { Card, CardTitle } from "@/components/ui/card";
 import { ScannedItem } from '@/types/dashboard';
-import { Heart, MapPin, Clock, UtensilsCrossed, Check, TrendingUp, Eye, AlertTriangle, Leaf } from 'lucide-react';
+import { Heart, MapPin, Clock, UtensilsCrossed, Check, Eye, AlertTriangle, Leaf } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import StarRating from '@/components/ui/StarRating';
-import { normalizePrice } from '@/utils/recommendations';
+import { normalizePrice, formatPriceRange } from '@/utils/recommendations';
 import { formatPrepTime } from '@/utils/formatters';
-import { getPopularityLabel, getPopularityColor } from '@/hooks/useDishPopularity';
 import { checkAllergens, formatAllergenLabels } from '@/services/allergyCheck';
 
 interface AllergyInfo {
@@ -22,7 +21,6 @@ interface MenuCardProps {
     onLocationClick?: () => void;
     onAddToMealLog?: () => void;
     isInMealLog?: boolean;
-    scanCount?: number;
     viewCount?: number;
     rating?: number;
     averageRating?: number;
@@ -32,7 +30,7 @@ interface MenuCardProps {
     showHealthierBadge?: boolean;
 }
 
-const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, onLocationClick, onAddToMealLog, isInMealLog = false, scanCount = 0, viewCount = 0, rating = 0, averageRating = 0, totalReviews = 0, userAllergens = [], allergyInfo, showHealthierBadge = false }) => {
+const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onLike, onLocationClick, onAddToMealLog, isInMealLog = false, viewCount = 0, rating = 0, averageRating = 0, totalReviews = 0, userAllergens = [], allergyInfo, showHealthierBadge = false }) => {
     const computedAllergyInfo = allergyInfo || (userAllergens.length > 0 ? checkAllergens(item, userAllergens) : null);
     const isAllergenSafe = computedAllergyInfo?.isSafe ?? true;
     const hasAllergenWarning = !isAllergenSafe;
@@ -121,9 +119,18 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                 </div>
 
                 <div className="p-5 pt-0 sm:pt-5 sm:pl-2 min-w-[30%] flex flex-col items-start sm:items-end gap-3 border-t sm:border-t-0 sm:border-l border-gray-100 bg-gray-50/50 sm:bg-transparent">
-                    <span className="text-amber-600 font-bold text-lg whitespace-nowrap bg-amber-50 px-3 py-1 rounded-full border border-amber-200 shadow-sm">
-                        {normalizePrice(item.price)}
-                    </span>
+                    {item.priceMin && item.priceMax ? (
+                        <div className="flex flex-col items-start sm:items-end gap-1">
+                            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Est. price</span>
+                            <span className="text-amber-600 font-bold text-sm whitespace-nowrap bg-amber-50 px-3 py-1 rounded-full border border-amber-200 shadow-sm">
+                                {formatPriceRange(item.priceMin, item.priceMax)}
+                            </span>
+                        </div>
+                    ) : (
+                        <span className="text-amber-600 font-bold text-lg whitespace-nowrap bg-amber-50 px-3 py-1 rounded-full border border-amber-200 shadow-sm">
+                            {normalizePrice(item.price)}
+                        </span>
+                    )}
 
                     <div className="hidden sm:block">
                         {onLike && (
@@ -155,16 +162,9 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                                 <Leaf size={12} /> Healthier Choice
                             </span>
                         )}
-                        {scanCount > 0 && (
-                            <span className={`text-xs font-medium px-2 py-1 rounded-md flex items-center gap-1 border ${getPopularityColor(scanCount)}`}>
-                                <TrendingUp size={12} /> {getPopularityLabel(scanCount)} ({scanCount})
-                            </span>
-                        )}
-                        {viewCount > 0 && (
-                            <span className="text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md flex items-center gap-1">
+                        <span className="text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md flex items-center gap-1">
                                 <Eye size={12} /> {viewCount}
                             </span>
-                        )}
                         {item.calories && (
                             <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md flex items-center gap-1 shadow-sm">
                                 🔥 {item.calories}

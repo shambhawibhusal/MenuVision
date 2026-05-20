@@ -99,6 +99,19 @@ export function getPriceRange(price: string): 'budget' | 'moderate' | 'expensive
     return 'premium';
 }
 
+export function formatPriceRange(priceMin?: string, priceMax?: string, fallbackPrice?: string): string {
+    if (priceMin && priceMax) return `${priceMin} - ${priceMax}`;
+    if (fallbackPrice) {
+        const value = extractPriceValue(fallbackPrice);
+        if (value > 0) {
+            const min = Math.round(value * 0.8);
+            const max = Math.round(value * 1.2);
+            return `Rs. ${min} - Rs. ${max}`;
+        }
+    }
+    return `Rs. 150 - Rs. 450`;
+}
+
 function normalizeTags(dish: Dish): string[] {
     const tags = new Set<string>();
     

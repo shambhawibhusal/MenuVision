@@ -2,6 +2,8 @@ export interface ScannedItem {
     datasetId?: string;
     name: string;
     price: string;
+    priceMin?: string;
+    priceMax?: string;
     place?: string;
     location?: string;
     calories?: string;
@@ -136,11 +138,22 @@ export interface HistoryItem {
 }
 
 export interface ChatMessage {
-    id: number;
+    id: string;
     text: string;
     sender: 'user' | 'bot';
     imageUrl?: string | null;
     dishes?: ScannedItem[];
+    createdAt?: any;
+}
+
+export interface ChatSession {
+    id: string;
+    userId: string;
+    title: string;
+    createdAt: any;
+    updatedAt: any;
+    lastMessage?: string;
+    messageCount: number;
 }
 
 export type Tab = 'home' | 'results' | 'chat' | 'profile' | 'history' | 'meallog';

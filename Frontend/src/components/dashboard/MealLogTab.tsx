@@ -24,7 +24,7 @@ import {
 } from '@/types/nutritionGoals';
 import { useMealLog } from '@/hooks/useMealLog';
 import { getDishById } from '@/services/menuDataset';
-import { Utensils, Coffee, Moon, Apple, Calendar, Flame, Trash2, ChevronDown, AlertTriangle, Target, User, Save, Check } from 'lucide-react';
+import { Utensils, Coffee, Moon, Apple, Calendar, Flame, Trash2, ChevronDown, AlertTriangle, Target, User, Save, Check, Pencil } from 'lucide-react';
 import { formatDateForDisplay, getTodayDateString, getCurrentMealType } from '@/services/mealLog';
 import { checkAllergens } from '@/services/allergyCheck';
 
@@ -38,6 +38,8 @@ interface MealLogTabProps {
     saveGoals?: (goals: NutritionGoals) => Promise<boolean>;
     saveMetrics?: (metrics: UserBodyMetrics) => Promise<boolean>;
     goalsLoading?: boolean;
+    openGoalsEditor?: boolean;
+    onGoalsEditorClosed?: () => void;
 }
 
 const MealTypeConfig: Record<MealType, { label: string; icon: React.ReactNode; emoji: string }> = {
@@ -265,6 +267,14 @@ const DailySummary: React.FC<{
                                 );
                             })}
                         </div>
+
+                        <button
+                            onClick={onSetGoals}
+                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl bg-white/80 hover:bg-white border border-amber-200 text-amber-600 text-xs font-medium transition-colors"
+                        >
+                            <Pencil size={13} />
+                            Edit Goals
+                        </button>
                     </div>
                 ) : (
                     <div className="border-t border-amber-200 pt-3">
@@ -502,12 +512,21 @@ const MealLogTab: React.FC<MealLogTabProps & { userAllergens?: string[] }> = ({
     saveGoals,
     saveMetrics,
     goalsLoading = false,
+    openGoalsEditor = false,
+    onGoalsEditorClosed,
 }) => {
     const { todayLog, loading, removeFromLog, nutritionSummary } = useMealLog();
     const [internalMealType, setInternalMealType] = useState<MealType>(getCurrentMealType());
     const selectedMealType = externalMealType || internalMealType;
     const setSelectedMealType = onMealTypeChange || setInternalMealType;
     const [showGoalsModal, setShowGoalsModal] = useState(false);
+
+    useEffect(() => {
+        if (openGoalsEditor) {
+            setShowGoalsModal(true);
+            onGoalsEditorClosed?.();
+        }
+    }, [openGoalsEditor]);
 
     const handleSelectDish = async (entry: MealLogEntry) => {
         let fullData: ScannedItem = {
