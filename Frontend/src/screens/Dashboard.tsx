@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Send, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating, MealType, FavoriteRef, ScannedItemRef } from '@/types/dashboard';
+import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating, MealType, FavoriteRef, ScannedItemRef, OrderItem } from '@/types/dashboard';
 import { formatPriceRange } from '@/utils/recommendations';
 
 import { useDishes } from '@/hooks/useDishes';
@@ -84,6 +84,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
     const [unlikedDishIds, setUnlikedDishIds] = useState<number[]>([]);
     const [scannedItemLikes, setScannedItemLikes] = useState<Set<string>>(new Set());
+    const [activeOrderItems, setActiveOrderItems] = useState<Set<string>>(new Set());
     const [phoneNumber, setPhoneNumber] = useState('');
     const [restaurantName, setRestaurantName] = useState('');
     const [restaurantLocation, setRestaurantLocation] = useState('');
@@ -212,6 +213,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     setPhoneNumber(data.phoneNumber || '');
                     setUnlikedDishIds(data.unliked || []);
                     setFoodProfile(data.foodProfile || DEFAULT_FOOD_PROFILE);
+                    const rawOrders: OrderItem[] = data.orders || [];
+                    const orderNames = new Set(rawOrders.map((o: OrderItem) => o.name));
+                    setActiveOrderItems(orderNames);
 
                     const updates: any = {};
                     if (!data.fullname && auth.currentUser.displayName) updates.fullname = auth.currentUser.displayName;
@@ -234,6 +238,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         favorites: [],
                         unliked: [],
                         history: [],
+                        orders: [],
                         foodProfile: DEFAULT_FOOD_PROFILE,
                         createdAt: new Date()
                     }, { merge: true });
@@ -385,6 +390,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             }
         } catch (error) {
             console.error("Error updating favorites for scanned item:", error);
+        }
+    };
+
+    const toggleOrderItem = async (item: ScannedItem) => {
+        if (!auth.currentUser) return;
+
+        const isInOrder = activeOrderItems.has(item.name);
+        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+        const place = item.place || 'Scanned Menu';
+        const loc = item.location || '';
+        const restaurantId = `${place}_${loc}`;
+
+        const orderItem: OrderItem = {
+            datasetId: item.datasetId || '',
+            name: item.name,
+            price: item.price || '',
+            restaurantId
+        };
+
+        try {
+            if (isInOrder) {
+                setActiveOrderItems(prev => {
+                    const next = new Set(prev);
+                    next.delete(item.name);
+                    return next;
+                });
+                await updateDoc(userDocRef, {
+                    orders: arrayRemove(orderItem)
+                });
+            } else {
+                setActiveOrderItems(prev => {
+                    const next = new Set(prev);
+                    next.add(item.name);
+                    return next;
+                });
+                await updateDoc(userDocRef, {
+                    orders: arrayUnion(orderItem)
+                });
+            }
+        } catch (error) {
+            console.error("Error updating order:", error);
         }
     };
 
@@ -1588,6 +1634,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 setShowRestaurantRatingModal(true);
                             }}
                             dishViewCounts={viewCountMap}
+                            orderItems={activeOrderItems}
+                            onToggleOrder={toggleOrderItem}
                         />
                     )}
                     {activeTab === 'chat' && (

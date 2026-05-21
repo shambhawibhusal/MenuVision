@@ -123,6 +123,13 @@ export interface FavoriteRef {
     restaurantId: string;
 }
 
+export interface OrderItem {
+    datasetId: string;
+    name: string;
+    price: string;
+    restaurantId: string;
+}
+
 export interface ScannedItemRef {
     datasetId: string;
     name: string;

@@ -22,6 +22,8 @@ interface ResultsTabProps {
     restaurantLocation?: string;
     onRateRestaurant?: (place: string, location: string) => void;
     dishViewCounts?: Record<string, number>;
+    orderItems?: Set<string>;
+    onToggleOrder?: (item: ScannedItem) => void;
 }
 
 import MenuCard from './MenuCard';
@@ -40,30 +42,12 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     restaurantPlace,
     restaurantLocation,
     onRateRestaurant,
-    dishViewCounts = {}
+    dishViewCounts = {},
+    orderItems = new Set(),
+    onToggleOrder
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
     const [isResolving, setIsResolving] = useState(true);
-    const [orderItems, setOrderItems] = useState<Set<string>>(() => {
-        try {
-            const stored = sessionStorage.getItem('orderItems');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) return new Set(parsed);
-            }
-        } catch {}
-        return new Set();
-    });
-
-    useEffect(() => {
-        sessionStorage.setItem('orderItems', JSON.stringify([...orderItems]));
-    }, [orderItems]);
-
-    useEffect(() => {
-        if (scannedItems.length === 0) {
-            setOrderItems(new Set());
-        }
-    }, [scannedItems]);
 
     const dishIds = resolvedItems.map(item => item.datasetId || item.name).filter(Boolean);
     const dishAverageRatings = useDishAverageRatings(dishIds);
@@ -92,16 +76,10 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
         return () => { cancelled = true; };
     }, [scannedItems]);
 
-    const toggleOrder = (itemName: string) => {
-        setOrderItems(prev => {
-            const next = new Set(prev);
-            if (next.has(itemName)) {
-                next.delete(itemName);
-            } else {
-                next.add(itemName);
-            }
-            return next;
-        });
+    const toggleOrder = (item: ScannedItem) => {
+        if (onToggleOrder) {
+            onToggleOrder(item);
+        }
     };
 
     const orderTotal = React.useMemo(() => {
@@ -156,7 +134,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                             onLocationClick={onLocationClick ? () => onLocationClick(item as Dish) : undefined}
                             onAddToMealLog={onAddToMealLog ? () => onAddToMealLog(item) : undefined}
                             isInMealLog={inMealLog}
-                            onAddToOrder={() => toggleOrder(itemName)}
+                            onAddToOrder={() => toggleOrder(item)}
                             isInOrder={inOrder}
                             allergyInfo={allergyInfo}
                             rating={userRating}
@@ -189,7 +167,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                             <span key={idx} className="inline-flex items-center gap-1 text-xs bg-white border border-amber-200 text-amber-700 px-2.5 py-1 rounded-full shadow-sm">
                                 {item.name}
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); toggleOrder(item.name); }}
+                                    onClick={(e) => { e.stopPropagation(); toggleOrder(item); }}
                                     className="hover:text-red-500 transition-colors"
                                 >
                                     <X size={12} />
