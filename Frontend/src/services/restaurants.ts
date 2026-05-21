@@ -1,6 +1,6 @@
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, increment } from 'firebase/firestore';
-import { NewRestaurantReview, Restaurant } from '@/types/dashboard';
+import { doc, getDoc, getDocs, setDoc, updateDoc, addDoc, collection, serverTimestamp, increment, arrayUnion } from 'firebase/firestore';
+import { NewRestaurantReview, Restaurant, RestaurantDish } from '@/types/dashboard';
 
 export const incrementRestaurantScanCount = async (restaurantId: string): Promise<boolean> => {
     try {
@@ -10,7 +10,7 @@ export const incrementRestaurantScanCount = async (restaurantId: string): Promis
         
         if (!restaurantDoc.exists()) {
             const [place, location] = restaurantId.split('_');
-            await updateDoc(restaurantDocRef, {
+            await setDoc(restaurantDocRef, {
                 name: place || restaurantId,
                 location: location || '',
                 totalScans: 1,
@@ -18,7 +18,7 @@ export const incrementRestaurantScanCount = async (restaurantId: string): Promis
                 lastScanned: serverTimestamp(),
                 averageRating: 0,
                 totalReviews: 0
-            });
+            }, { merge: true });
         } else {
             await updateDoc(restaurantDocRef, {
                 totalScans: increment(1),
@@ -102,4 +102,63 @@ export const getRestaurantById = async (restaurantId: string): Promise<Restauran
 export const getRestaurantByNameAndLocation = async (name: string, location: string): Promise<Restaurant | null> => {
     const restaurantId = `${name}_${location}`;
     return getRestaurantById(restaurantId);
+};
+
+export const addDishToRestaurant = async (restaurantId: string, dish: RestaurantDish): Promise<boolean> => {
+    try {
+        if (!dish.datasetId) return false;
+        const dishData = {
+            datasetId: dish.datasetId,
+            name: dish.name,
+            price: dish.price,
+            place: dish.place,
+            location: dish.location
+        };
+        await updateDoc(doc(db, 'restaurants', restaurantId), {
+            dishes: arrayUnion(dishData)
+        }).catch(async (err: any) => {
+            if (err.code === 'not-found') {
+                await setDoc(doc(db, 'restaurants', restaurantId), {
+                    name: dish.place,
+                    location: dish.location,
+                    dishes: [dishData],
+                    firstScanned: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                    lastScanned: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                    totalScans: 1,
+                    averageRating: 0,
+                    totalReviews: 0
+                }, { merge: true });
+            } else {
+                throw err;
+            }
+        });
+        return true;
+    } catch (error) {
+        console.error('Error adding dish to restaurant:', error);
+        return false;
+    }
+};
+
+export const getRestaurantDishes = async (restaurantId: string): Promise<RestaurantDish[]> => {
+    try {
+        const snap = await getDoc(doc(db, 'restaurants', restaurantId));
+        if (snap.exists()) {
+            const data = snap.data();
+            return (data.dishes || []) as RestaurantDish[];
+        }
+        return [];
+    } catch (error) {
+        console.error('Error getting restaurant dishes:', error);
+        return [];
+    }
+};
+
+export const getDishFromRestaurant = async (restaurantId: string, datasetId: string): Promise<RestaurantDish | null> => {
+    try {
+        const dishes = await getRestaurantDishes(restaurantId);
+        return dishes.find(d => d.datasetId === datasetId) || null;
+    } catch (error) {
+        console.error('Error getting dish from restaurant:', error);
+        return null;
+    }
 };

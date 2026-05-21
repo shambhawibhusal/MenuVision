@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Camera, History, User, MessageSquare, Home, Edit, X, Heart, Leaf, Wheat, Check, MapPin, Send, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating, MealType } from '@/types/dashboard';
+import { Dish, ScannedItem, HistoryItem, Tab, FoodProfile, ALLERGENS, Allergen, DEFAULT_FOOD_PROFILE, DishRating, MealType, FavoriteRef, ScannedItemRef } from '@/types/dashboard';
 import { formatPriceRange } from '@/utils/recommendations';
 
 import { useDishes } from '@/hooks/useDishes';
@@ -30,14 +30,14 @@ import { useDishReviews } from '@/hooks/useDishReviews';
 import { useDishAverageRatings } from '@/hooks/useDishAverageRatings';
 import { useMealLog } from '@/hooks/useMealLog';
 import { useNutritionGoals } from '@/hooks/useNutritionGoals';
-import { useDishPopularity } from '@/hooks/useDishPopularity';
+import { useDishPopularity, DishViewContext } from '@/hooks/useDishPopularity';
 import { useRestaurantReviews } from '@/hooks/useRestaurantReviews';
 import { useToast, ToastContainer } from '@/hooks/useToast';
 import { getRecommendations, getPriceRange } from '../utils/recommendations';
 import { searchDishes, groupDishesByName, groupDishesByRestaurant } from '../utils/search';
 import { formatPrepTime, formatDate } from '../utils/formatters';
 import { checkDishInDataset, addDishToDataset, incrementScanCount, resolveScannedItems } from '../services/menuDataset';
-import { incrementRestaurantScanCount } from '../services/restaurants';
+import { incrementRestaurantScanCount, addDishToRestaurant } from '../services/restaurants';
 import { addRestaurantReview } from '../services/restaurants';
 import { getHealthierAlternatives, checkAllergens, formatAllergenLabels } from '../services/allergyCheck';
 import {
@@ -129,7 +129,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const dishIds = useMemo(() => allDishes.map(d => d.datasetId || String(d.id)), [allDishes]);
     const dishAverageRatings = useDishAverageRatings(dishIds);
-    const { popularityMap, trackView } = useDishPopularity(dishIds);
+    const dishContexts = useMemo<DishViewContext[]>(() => {
+        const contexts: DishViewContext[] = [];
+        const seenIds = new Set<string>();
+
+        for (const fav of favoriteItems) {
+            if (fav.datasetId && !seenIds.has(fav.datasetId)) {
+                seenIds.add(fav.datasetId);
+                contexts.push({ datasetId: fav.datasetId, place: fav.place, location: fav.location || '' });
+            }
+        }
+        for (const item of historyItems) {
+            if (item.scannedItems) {
+                for (const scanned of item.scannedItems) {
+                    const sid = (scanned as any).datasetId;
+                    if (sid && !seenIds.has(sid)) {
+                        seenIds.add(sid);
+                        contexts.push({ datasetId: sid, place: item.place || (scanned as any).place || '', location: item.location || (scanned as any).location || '' });
+                    }
+                }
+            }
+        }
+        for (const d of allDishes) {
+            if (d.datasetId && !seenIds.has(d.datasetId)) {
+                seenIds.add(d.datasetId);
+                contexts.push({ datasetId: d.datasetId, place: d.place, location: d.location || '' });
+            }
+        }
+        return contexts;
+    }, [allDishes, favoriteItems, historyItems]);
+    const { viewCountMap, trackView } = useDishPopularity(dishContexts);
 
     React.useEffect(() => {
         const fetchUserData = async () => {
@@ -141,7 +170,23 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
                 if (userDoc.exists()) {
                     const data = userDoc.data();
-                    setFavoriteItems(data.favorites || []);
+                    const rawFavorites = data.favorites || [];
+                    const resolvedFavorites: Dish[] = rawFavorites.map((fav: any, index: number) => {
+                        if (fav.restaurantId && fav.datasetId) {
+                            const [place, ...locParts] = fav.restaurantId.split('_');
+                            const idHash = (fav.datasetId || '').split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
+                            return {
+                                id: fav.id || (idHash + index),
+                                datasetId: fav.datasetId,
+                                name: fav.name,
+                                price: fav.price || 'Price not available',
+                                place: place || '',
+                                location: locParts.join('_') || '',
+                            } as Dish;
+                        }
+                        return fav as Dish;
+                    });
+                    setFavoriteItems(resolvedFavorites);
 
                     // Migrate old history items to add sortDate
                     const history = (data.history || []).map((item: HistoryItem) => {
@@ -215,25 +260,45 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const toggleRecommendedLike = async (dish: Dish) => {
         if (!auth.currentUser) return;
 
-        const existingFav = favoriteItems.find(item => item.id === dish.id);
+        const existingFav = favoriteItems.find(item => item.id === dish.id || (dish.datasetId && item.datasetId === dish.datasetId));
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
 
         try {
             if (existingFav) {
                 setFavoriteItems(prev => prev.filter(item => item.id !== dish.id));
                 setUnlikedDishIds(prev => [...prev, dish.id]);
+                const removeRef: FavoriteRef = {
+                    datasetId: existingFav.datasetId || '',
+                    name: existingFav.name,
+                    price: existingFav.price || '',
+                    restaurantId: existingFav.place ? `${existingFav.place}_${existingFav.location || ''}` : (existingFav as any).restaurantId || ''
+                };
                 await updateDoc(userDocRef, {
-                    favorites: arrayRemove(existingFav),
+                    favorites: arrayRemove(removeRef),
                     unliked: arrayUnion(dish.id)
                 });
             } else {
-                const cleanedDish = Object.fromEntries(
-                    Object.entries(dish).filter(([, v]) => v !== undefined)
+                const restaurantId = `${dish.place}_${dish.location || ''}`;
+                const favoriteRef: FavoriteRef = {
+                    datasetId: dish.datasetId || '',
+                    name: dish.name,
+                    price: dish.price || '',
+                    restaurantId
+                };
+                await addDishToRestaurant(restaurantId, {
+                    datasetId: dish.datasetId || '',
+                    name: dish.name,
+                    price: dish.price || '',
+                    place: dish.place,
+                    location: dish.location || ''
+                });
+                const cleanedRef = Object.fromEntries(
+                    Object.entries(favoriteRef).filter(([, v]) => v !== undefined && v !== '')
                 );
                 setFavoriteItems(prev => [...prev, dish]);
                 setUnlikedDishIds(prev => prev.filter(id => id !== dish.id));
                 await updateDoc(userDocRef, {
-                    favorites: arrayUnion(cleanedDish)
+                    favorites: arrayUnion(cleanedRef)
                 });
             }
         } catch (error) {
@@ -258,15 +323,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 const existingFav = favoriteItems.find(fav => fav.name === item.name);
                 if (existingFav) {
                     setFavoriteItems(prev => prev.filter(fav => fav.name !== item.name));
+                    const removeRef: FavoriteRef = {
+                        datasetId: existingFav.datasetId || '',
+                        name: existingFav.name,
+                        price: existingFav.price || '',
+                        restaurantId: existingFav.place ? `${existingFav.place}_${existingFav.location || ''}` : (existingFav as any).restaurantId || ''
+                    };
                     if (existingFav.id) {
                         setUnlikedDishIds(prev => [...prev, existingFav.id]);
                         await updateDoc(userDocRef, {
-                            favorites: arrayRemove(existingFav),
+                            favorites: arrayRemove(removeRef),
                             unliked: arrayUnion(existingFav.id)
                         });
                     } else {
                         await updateDoc(userDocRef, {
-                            favorites: arrayRemove(existingFav)
+                            favorites: arrayRemove(removeRef)
                         });
                     }
                 }
@@ -277,20 +348,39 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     return next;
                 });
 
+                const place = item.place || 'Scanned Menu';
+                const loc = item.location || '';
+                const restaurantId = `${place}_${loc}`;
+
+                const favoriteRef: FavoriteRef = {
+                    datasetId: item.datasetId || '',
+                    name: item.name,
+                    price: item.price || '',
+                    restaurantId
+                };
+
+                await addDishToRestaurant(restaurantId, {
+                    datasetId: item.datasetId || '',
+                    name: item.name,
+                    price: item.price || '',
+                    place,
+                    location: loc
+                });
+
+                const cleanedRef = Object.fromEntries(
+                    Object.entries(favoriteRef).filter(([, v]) => v !== undefined && v !== '')
+                );
                 const newDish: Dish = {
                     id: Date.now(),
                     datasetId: item.datasetId,
                     name: item.name,
                     price: item.price || '',
-                    place: item.place || 'Scanned Menu',
+                    place,
                     location: item.location
                 };
-                const cleanedDish = Object.fromEntries(
-                    Object.entries(newDish).filter(([, v]) => v !== undefined)
-                );
                 setFavoriteItems(prev => [...prev, newDish]);
                 await updateDoc(userDocRef, {
-                    favorites: arrayUnion(cleanedDish)
+                    favorites: arrayUnion(cleanedRef)
                 });
             }
         } catch (error) {
@@ -656,12 +746,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         favoriteItems.forEach(addDish);
         historyItems.forEach(item => {
             if (item.scannedItems) {
-                item.scannedItems.forEach((scanned, idx) => {
+                item.scannedItems.forEach((scanned: any, idx: number) => {
+                    const [place, ...locParts] = (scanned.restaurantId || '').split('_');
                     const dish: Dish = {
-                        ...scanned,
+                        datasetId: scanned.datasetId,
+                        name: scanned.name,
+                        price: scanned.price || '',
                         id: item.id * 1000 + idx,
-                        place: scanned.place || item.place || 'Scanned Menu',
-                        price: scanned.price || ''
+                        place: scanned.place || place || item.place || 'Scanned Menu',
+                        location: scanned.location || locParts.join('_') || ''
                     };
                     addDish(dish);
                 });
@@ -995,11 +1088,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             const items = processedItems;
 
             if (items.length > 0) {
-                const sanitizedItems = items.map((item: ScannedItem) =>
+                const restaurantId = `${restaurantName || 'Scanned Menu'}_${restaurantLocation || ''}`;
+
+                const scannedItemRefs: ScannedItemRef[] = items.map((item: ScannedItem) => ({
+                    datasetId: item.datasetId || '',
+                    name: item.name,
+                    price: item.price || 'Price not available',
+                    restaurantId
+                }));
+
+                const sanitizedItems = scannedItemRefs.map((ref: ScannedItemRef) =>
                     Object.fromEntries(
-                        Object.entries(item).filter(([_, v]) => v !== undefined)
+                        Object.entries(ref).filter(([_, v]) => v !== undefined && v !== '')
                     )
-                ) as ScannedItem[];
+                ) as ScannedItemRef[];
 
                 const now = new Date();
                 const sortDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -1012,7 +1114,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     sortDate: sortDateStr,
                     items: items.slice(0, 2).map(i => i.name).join(', ') + (items.length > 2 ? '...' : ''),
                     total: `${items.length} dishes found`,
-                    scannedItems: sanitizedItems
+                    scannedItems: sanitizedItems as unknown as ScannedItem[]
                 };
 
                 setHistoryItems(prev => [newHistoryItem, ...prev]);
@@ -1023,8 +1125,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
                     // Increment restaurant scan count
                     if (restaurantName) {
-                        const restaurantId = `${restaurantName}_${restaurantLocation || ''}`;
                         await incrementRestaurantScanCount(restaurantId);
+
+                        // Write dishes to restaurant's dishes subcollection
+                        const place = restaurantName || 'Scanned Menu';
+                        const loc = restaurantLocation || '';
+                        for (const item of items) {
+                            if (item.datasetId) {
+                                addDishToRestaurant(restaurantId, {
+                                    datasetId: item.datasetId,
+                                    name: item.name,
+                                    price: item.price || 'Price not available',
+                                    place,
+                                    location: loc
+                                }).catch(err => console.error('Error saving dish to restaurant:', err));
+                            }
+                        }
                     }
 
                     await updateDoc(userDocRef, {
@@ -1413,7 +1529,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             favoriteItems={favoriteItems}
                             toggleRecommendedLike={toggleRecommendedLike}
                             onSelectDish={(dish) => {
-                                if (dish.datasetId) trackView(dish.datasetId);
+                                if (dish.datasetId) trackView(dish.datasetId, dish.place, dish.location || '');
                                 setSelectedDish(dish as ScannedItem);
                             }}
                             onAddToMealLog={(dish) => {
@@ -1427,7 +1543,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             isDishInMealLog={isDishInMealLog}
                             dishRatings={dishRatings}
                             dishAverageRatings={dishAverageRatings}
-                            dishPopularity={popularityMap}
+                            dishPopularity={viewCountMap}
                             userAllergens={foodProfile.allergens}
                             activeFilters={activeFilters}
                             setActiveFilters={setActiveFilters}
@@ -1447,7 +1563,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <ResultsTab
                             scannedItems={scannedItems}
                             setSelectedDish={(item) => {
-                                if (item.datasetId) trackView(item.datasetId);
+                                if (item.datasetId) trackView(item.datasetId, item.place || '', item.location || '');
                                 setSelectedDish(item);
                             }}
                             setActiveTab={setActiveTab}
@@ -1471,6 +1587,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 setSelectedRestaurantForRating({ place, location });
                                 setShowRestaurantRatingModal(true);
                             }}
+                            dishViewCounts={viewCountMap}
                         />
                     )}
                     {activeTab === 'chat' && (
@@ -1493,7 +1610,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 chatLoading={chatLoading}
                                 sessionsLoading={chatSessionsLoading}
                                 onDishClick={(item) => {
-                                    if (item.datasetId) trackView(item.datasetId);
+                                    if (item.datasetId) trackView(item.datasetId, item.place || '', item.location || '');
                                     setSelectedDish(item);
                                 }}
                                 userAllergens={foodProfile.allergens}
@@ -1503,6 +1620,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                     if (activeSessionId) renameSession(activeSessionId, title);
                                 }}
                                 onNewSession={createNewSession}
+                                dishViewCounts={viewCountMap}
                             />
                         </>
                     )}
@@ -1539,7 +1657,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 }
                             }}
                             onSelectFavorite={(dish) => {
-                                if (dish.datasetId) trackView(dish.datasetId);
+                                if (dish.datasetId) trackView(dish.datasetId, dish.place, dish.location || '');
                                 setSelectedDish(dish as ScannedItem);
                             }}
                             dishRatings={dishRatings}
@@ -1548,7 +1666,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     {activeTab === 'meallog' && (
                         <MealLogTab
                             onSelectDish={(dish) => {
-                                if (dish.datasetId) trackView(dish.datasetId);
+                                if (dish.datasetId) trackView(dish.datasetId, dish.place, dish.location || '');
                                 setSelectedDish(dish as ScannedItem);
                             }}
                             onShowToast={showToast}

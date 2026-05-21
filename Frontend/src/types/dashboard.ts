@@ -116,6 +116,28 @@ export interface Dish extends ScannedItem {
     longitude?: number;
 }
 
+export interface FavoriteRef {
+    datasetId: string;
+    name: string;
+    price: string;
+    restaurantId: string;
+}
+
+export interface ScannedItemRef {
+    datasetId: string;
+    name: string;
+    price: string;
+    restaurantId: string;
+}
+
+export interface RestaurantDish {
+    datasetId: string;
+    name: string;
+    price: string;
+    place: string;
+    location: string;
+}
+
 export interface DishGroup {
     name: string;
     restaurants: Dish[];

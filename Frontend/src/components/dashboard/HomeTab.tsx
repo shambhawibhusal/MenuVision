@@ -17,11 +17,6 @@ interface DishAverageRating {
     totalReviews: number;
 }
 
-interface DishPopularity {
-    dishId: string;
-    viewCount: number;
-}
-
 interface HomeTabProps {
     searchText: string;
     setSearchText: (val: string) => void;
@@ -35,7 +30,7 @@ interface HomeTabProps {
     isDishInMealLog?: (dishName: string) => boolean;
     dishRatings?: Record<string, DishRating>;
     dishAverageRatings?: Record<string, DishAverageRating>;
-    dishPopularity?: Record<string, DishPopularity>;
+    dishPopularity?: Record<string, number>;
     userAllergens?: string[];
     activeFilters: {
         isVegetarian: boolean;
@@ -632,7 +627,9 @@ const HomeTab: React.FC<HomeTabProps> = ({
                         const userRating = dishRatings[ratingKey]?.rating || 0;
                         const avgRating = dishAverageRatings[dish?.datasetId || String(dish?.id || index)];
                         const inMealLog = isDishInMealLog ? isDishInMealLog(dishName) : false;
-                        const popularity = dishPopularity[dish?.datasetId || String(dish?.id || index)];
+                        const restId = `${dish.place}_${dish.location || ''}`;
+                        const viewKey = `${restId}|${dish.datasetId || String(dish.id)}`;
+                        const popularity = dishPopularity[viewKey];
                         return (
                             <MenuCard
                                 key={dish?.id || index}
@@ -643,7 +640,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                                 onLocationClick={() => onLocationClick?.(dish)}
                                 onAddToMealLog={onAddToMealLog ? () => onAddToMealLog(dish) : undefined}
                                 isInMealLog={inMealLog}
-                                viewCount={popularity?.viewCount}
+                                viewCount={popularity || 0}
                                 rating={userRating}
                                 averageRating={avgRating?.averageRating}
                                 totalReviews={avgRating?.totalReviews}

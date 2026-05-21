@@ -21,6 +21,7 @@ interface ResultsTabProps {
     restaurantPlace?: string;
     restaurantLocation?: string;
     onRateRestaurant?: (place: string, location: string) => void;
+    dishViewCounts?: Record<string, number>;
 }
 
 import MenuCard from './MenuCard';
@@ -38,7 +39,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     isDishInMealLog,
     restaurantPlace,
     restaurantLocation,
-    onRateRestaurant
+    onRateRestaurant,
+    dishViewCounts = {}
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
     const [isResolving, setIsResolving] = useState(true);
@@ -160,6 +162,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                             rating={userRating}
                             averageRating={avgRating?.averageRating}
                             totalReviews={avgRating?.totalReviews}
+                            viewCount={(() => { const rid = `${item.place || ''}_${item.location || ''}`; return dishViewCounts[`${rid}|${item?.datasetId || ''}`] || 0; })()}
                         />
                     );
                 })}

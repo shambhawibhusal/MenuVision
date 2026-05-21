@@ -22,6 +22,7 @@ interface ChatTabProps {
     sessionTitle: string;
     onRenameSession: (title: string) => void;
     onNewSession: () => void;
+    dishViewCounts?: Record<string, number>;
 }
 
 const preprocessText = (text: string) => {
@@ -45,6 +46,7 @@ const ChatTab: React.FC<ChatTabProps> = ({
     sessionTitle,
     onRenameSession,
     onNewSession,
+    dishViewCounts = {},
 }) => {
     const [editingTitle, setEditingTitle] = useState(false);
     const [titleDraft, setTitleDraft] = useState(sessionTitle);
@@ -205,6 +207,7 @@ const ChatTab: React.FC<ChatTabProps> = ({
                                             item={dish}
                                             onClick={() => onDishClick?.(dish)}
                                             userAllergens={userAllergens}
+                                            viewCount={(() => { const rid = `${dish.place || ''}_${dish.location || ''}`; return dishViewCounts[`${rid}|${dish?.datasetId || ''}`] || 0; })()}
                                         />
                                     ))}
                                 </div>

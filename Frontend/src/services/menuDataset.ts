@@ -244,27 +244,43 @@ export const resolveScannedItem = async (scannedItem: ScannedItem): Promise<Scan
 
     try {
         const datasetItem = await getDishById(scannedItem.datasetId);
-        if (!datasetItem) {
-            return scannedItem;
+
+        const resolved: ScannedItem = {
+            ...scannedItem,
+            description: datasetItem?.description,
+            ingredients: datasetItem?.ingredients,
+            calories: datasetItem?.calories,
+            prepTime: datasetItem?.prepTime,
+            imageUrl: datasetItem?.imageUrl,
+            allergens: datasetItem?.allergens,
+            isVegan: datasetItem?.isVegan,
+            isVegetarian: datasetItem?.isVegetarian,
+            isGlutenFree: datasetItem?.isGlutenFree,
+            origin: datasetItem?.origin,
+            category: datasetItem?.category,
+            latitude: datasetItem?.latitude ?? scannedItem.latitude,
+            longitude: datasetItem?.longitude ?? scannedItem.longitude,
+            nutrition: datasetItem?.nutrition
+        };
+
+        if (!resolved.place || !resolved.location) {
+            const restaurantId = (scannedItem as any).restaurantId;
+            if (restaurantId) {
+                try {
+                    const restaurantDocRef = doc(db, 'restaurants', restaurantId);
+                    const restaurantSnap = await getDoc(restaurantDocRef);
+                    if (restaurantSnap.exists()) {
+                        const restaurantData = restaurantSnap.data();
+                        if (!resolved.place) resolved.place = restaurantData.name || '';
+                        if (!resolved.location) resolved.location = restaurantData.location || '';
+                    }
+                } catch (err) {
+                    console.error('Error resolving restaurant for scanned item:', err);
+                }
+            }
         }
 
-        return {
-            ...scannedItem,
-            description: datasetItem.description,
-            ingredients: datasetItem.ingredients,
-            calories: datasetItem.calories,
-            prepTime: datasetItem.prepTime,
-            imageUrl: datasetItem.imageUrl,
-            allergens: datasetItem.allergens,
-            isVegan: datasetItem.isVegan,
-            isVegetarian: datasetItem.isVegetarian,
-            isGlutenFree: datasetItem.isGlutenFree,
-            origin: datasetItem.origin,
-            category: datasetItem.category,
-            latitude: datasetItem.latitude ?? scannedItem.latitude,
-            longitude: datasetItem.longitude ?? scannedItem.longitude,
-            nutrition: datasetItem.nutrition
-        };
+        return resolved;
     } catch (error) {
         console.error('Error resolving scanned item:', error);
         return scannedItem;

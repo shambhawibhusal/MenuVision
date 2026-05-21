@@ -28,11 +28,25 @@ export function useGloballyLikedDishes() {
 
                     snapshot.docs.forEach(userDoc => {
                         const userData = userDoc.data();
-                        const favorites: Dish[] = userData.favorites || [];
+                        const rawFavorites = userData.favorites || [];
 
                         if (userDoc.id === currentUserId) return;
 
-                        favorites.forEach((dish: Dish) => {
+                        rawFavorites.forEach((fav: any) => {
+                            let dish: Dish;
+                            if (fav.restaurantId && fav.datasetId && !fav.place) {
+                                const [place, ...locParts] = fav.restaurantId.split('_');
+                                dish = {
+                                    id: Date.now() + Math.random(),
+                                    datasetId: fav.datasetId,
+                                    name: fav.name,
+                                    price: fav.price || 'Price not available',
+                                    place: place || '',
+                                    location: locParts.join('_') || ''
+                                };
+                            } else {
+                                dish = fav as Dish;
+                            }
                             if (dish.id && !dishMap.has(dish.id)) {
                                 dishMap.set(dish.id, dish);
                             }
