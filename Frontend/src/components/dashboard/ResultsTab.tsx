@@ -41,7 +41,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     onRateRestaurant
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
-    const [isResolving, setIsResolving] = useState(false);
+    const [isResolving, setIsResolving] = useState(true);
     const [orderItems, setOrderItems] = useState<Set<string>>(() => {
         try {
             const stored = sessionStorage.getItem('orderItems');
@@ -71,6 +71,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
         const loadResolvedItems = async () => {
             if (scannedItems.length === 0) {
                 setResolvedItems([]);
+                setIsResolving(false);
                 return;
             }
             setIsResolving(true);
@@ -163,7 +164,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     );
                 })}
             </div>
-            {orderItemsCount > 0 && (
+            {!isResolving && orderItemsCount > 0 && (
                 <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl shadow-lg">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">

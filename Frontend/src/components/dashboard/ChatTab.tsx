@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { MessageSquare, Menu, Plus, Check, X } from "lucide-react";
+import { MessageSquare, Menu, Plus, Check, X, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,6 +15,7 @@ interface ChatTabProps {
     setChatInput: (v: string) => void;
     sendMessage: () => void;
     chatLoading?: boolean;
+    sessionsLoading?: boolean;
     onDishClick?: (item: ScannedItem) => void;
     userAllergens?: string[];
     onToggleSidebar: () => void;
@@ -37,6 +38,7 @@ const ChatTab: React.FC<ChatTabProps> = ({
     setChatInput,
     sendMessage,
     chatLoading,
+    sessionsLoading,
     onDishClick,
     userAllergens,
     onToggleSidebar,
@@ -48,6 +50,8 @@ const ChatTab: React.FC<ChatTabProps> = ({
     const [titleDraft, setTitleDraft] = useState(sessionTitle);
     const titleInputRef = useRef<HTMLInputElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
+    const [isNearBottom, setIsNearBottom] = useState(true);
 
     useEffect(() => {
         setTitleDraft(sessionTitle);
@@ -60,9 +64,25 @@ const ChatTab: React.FC<ChatTabProps> = ({
         }
     }, [editingTitle]);
 
+    const handleScroll = useCallback(() => {
+        const el = messagesContainerRef.current;
+        if (!el) return;
+        const threshold = 150;
+        const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+        setIsNearBottom(nearBottom);
+    }, []);
+
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [chatMessages]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, []);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
 
     const handleTitleSubmit = () => {
         const trimmed = titleDraft.trim();
@@ -124,7 +144,18 @@ const ChatTab: React.FC<ChatTabProps> = ({
                 </button>
             </div>
 
-            <div className="flex-1 p-5 overflow-y-auto space-y-4">
+            <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 p-5 overflow-y-auto space-y-4 relative">
+                {sessionsLoading ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
+                        <div className="flex gap-1.5">
+                            <span className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <span className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <span className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                        <span className="text-xs">Loading messages...</span>
+                    </div>
+                ) : (
+                <>
                 {chatMessages.map(msg => (
                     <div key={msg.id} className={`max-w-[85%] flex ${msg.sender === 'user' ? 'justify-end ml-auto' : 'justify-start mr-auto'}`}>
                         <div className={`p-4 rounded-2xl text-sm shadow-sm leading-relaxed ${msg.sender === 'user'
@@ -191,6 +222,21 @@ const ChatTab: React.FC<ChatTabProps> = ({
                             </div>
                         </div>
                     </div>
+                )}
+                <div ref={messagesEndRef} />
+
+                {!isNearBottom && (
+                    <div className="sticky bottom-6 flex justify-end">
+                        <button
+                            onClick={scrollToBottom}
+                            className="w-10 h-10 rounded-full bg-black text-white shadow-lg flex items-center justify-center hover:bg-gray-800 transition-all z-10"
+                            title="Scroll to newest message"
+                        >
+                            <ChevronDown size={20} />
+                        </button>
+                    </div>
+                )}
+                </>
                 )}
             </div>
 

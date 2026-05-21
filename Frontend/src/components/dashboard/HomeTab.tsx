@@ -66,6 +66,7 @@ interface HomeTabProps {
     mealLogEntries?: MealLogEntry[];
     nutritionGoals?: NutritionGoals | null;
     recommendationsLoading?: boolean;
+    dishesLoading?: boolean;
 }
 
 const SORT_OPTIONS = [
@@ -102,6 +103,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
     mealLogEntries = [],
     nutritionGoals = null,
     recommendationsLoading = false,
+    dishesLoading = false,
 }) => {
     const [showFilters, setShowFilters] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -575,7 +577,7 @@ const HomeTab: React.FC<HomeTabProps> = ({
                 </h3>
             </div>
 
-            {!searchText.trim() && recommendationsLoading ? (
+            {!searchText.trim() && (dishesLoading || recommendationsLoading) ? (
                 <div className="flex flex-col gap-4">
                     {[1, 2, 3].map(i => (
                         <div key={i} className="rounded-2xl bg-white border border-gray-100 p-4 shadow-sm animate-pulse">

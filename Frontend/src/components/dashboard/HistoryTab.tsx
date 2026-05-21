@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { HistoryItem, Dish, DishRating, ScannedItem } from '@/types/dashboard';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Trash2 } from 'lucide-react';
+import { MapPin, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import MenuCard from './MenuCard';
 import { resolveScannedItems } from '@/services/menuDataset';
@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 
 interface HistoryTabProps {
     historyItems: HistoryItem[];
+    userDataLoading?: boolean;
     favoriteItems: Dish[];
     toggleLike: (dish: Dish) => void;
     onSelectHistoryItem: (item: HistoryItem) => void;
@@ -28,7 +29,7 @@ interface HistoryTabProps {
     dishRatings?: Record<string, DishRating>;
 }
 
-const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite, dishRatings = {} }) => {
+const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, userDataLoading, favoriteItems, toggleLike, onSelectHistoryItem, onDeleteHistoryItem, onSelectFavorite, dishRatings = {} }) => {
     const [sortBy, setSortBy] = useState<'latest' | 'oldest'>('latest');
     const [resolvedFavorites, setResolvedFavorites] = useState<Dish[]>([]);
 
@@ -81,7 +82,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ historyItems, favoriteItems, to
                             Oldest
                         </Button>
                     </div>
-                    {sortedHistoryItems.length === 0 ? (
+                    {userDataLoading ? (
+                        <div className="flex items-center justify-center py-20">
+                            <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+                        </div>
+                    ) : sortedHistoryItems.length === 0 ? (
                         <div className="text-center py-20 text-gray-400">No history yet.</div>
                     ) : (
                         sortedHistoryItems.map(item => (

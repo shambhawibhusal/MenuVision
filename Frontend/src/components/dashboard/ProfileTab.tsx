@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit, LogOut, Leaf, Wheat, Target } from "lucide-react";
+import { Edit, LogOut, Leaf, Wheat, Target, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -11,6 +11,7 @@ import { UserBodyMetrics, NutritionGoals } from '@/types/nutritionGoals';
 
 interface ProfileTabProps {
     user: FirebaseUser | null;
+    userDataLoading?: boolean;
     phoneNumber?: string;
     foodProfile?: FoodProfile;
     bodyMetrics?: UserBodyMetrics | null;
@@ -23,6 +24,7 @@ interface ProfileTabProps {
 
 const ProfileTab: React.FC<ProfileTabProps> = ({
     user,
+    userDataLoading = false,
     phoneNumber,
     foodProfile,
     bodyMetrics,
@@ -40,6 +42,11 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
     return (
         <div className="p-5 flex flex-col h-full animate-fade overflow-y-auto">
             <h2 className="text-3xl font-bold text-gray-900 mb-8">My Profile</h2>
+            {userDataLoading ? (
+                <div className="flex items-center justify-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+                </div>
+            ) : (
             <Card className="bg-white rounded-3xl shadow-xl border-none flex-shrink-0">
                 <CardHeader className="flex flex-col items-center pt-10 pb-6 bg-gradient-to-b from-gray-50 to-white">
                     <Avatar className="w-24 h-24 border-4 border-white shadow-lg">
@@ -169,6 +176,7 @@ const ProfileTab: React.FC<ProfileTabProps> = ({
                     </Button>
                 </CardContent>
             </Card>
+            )}
         </div>
     );
 };

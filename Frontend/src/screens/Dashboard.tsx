@@ -80,6 +80,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const [analyzing, setAnalyzing] = useState(false);
 
     const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+    const [userDataLoading, setUserDataLoading] = useState(true);
     const [favoriteItems, setFavoriteItems] = useState<Dish[]>([]);
     const [unlikedDishIds, setUnlikedDishIds] = useState<number[]>([]);
     const [scannedItemLikes, setScannedItemLikes] = useState<Set<string>>(new Set());
@@ -162,6 +163,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         return item;
                     });
                     setHistoryItems(history);
+                    setUserDataLoading(false);
                     setPhoneNumber(data.phoneNumber || '');
                     setUnlikedDishIds(data.unliked || []);
                     setFoodProfile(data.foodProfile || DEFAULT_FOOD_PROFILE);
@@ -595,10 +597,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     ]);
     const [chatInput, setChatInput] = useState('');
     const [chatLoading, setChatLoading] = useState(false);
+    const [chatSessionsLoading, setChatSessionsLoading] = useState(true);
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-    const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+    const [activeSessionId, setActiveSessionId] = useState<string | null>(() => {
+        return sessionStorage.getItem('activeSessionId') || null;
+    });
     const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
     const chatLoadedRef = useRef(false);
+
+    useEffect(() => {
+        if (activeSessionId) {
+            sessionStorage.setItem('activeSessionId', activeSessionId);
+        } else {
+            sessionStorage.removeItem('activeSessionId');
+        }
+    }, [activeSessionId]);
 
     const recommendedDishes = useMemo(() => {
         console.log('Computing recommendations:', {
@@ -1111,15 +1124,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         if (!auth.currentUser) return;
         const sessions = await getChatSessions(auth.currentUser.uid);
         setChatSessions(sessions);
-        if (sessions.length > 0 && !activeSessionId) {
-            const mostRecent = sessions[0];
-            setActiveSessionId(mostRecent.id);
 
-            const msgs = await getChatMessages(mostRecent.id);
-            setChatMessages(msgs.length > 0 ? msgs : [
-                { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
-            ]);
+        const targetSessionId = activeSessionId && sessions.find(s => s.id === activeSessionId)
+            ? activeSessionId
+            : null;
+        const sessionToLoad = targetSessionId
+            ? sessions.find(s => s.id === targetSessionId)
+            : sessions.length > 0 ? sessions[0] : null;
 
+        if (sessionToLoad) {
+            setActiveSessionId(sessionToLoad.id);
+            setChatSessionsLoading(true);
+            try {
+                const msgs = await getChatMessages(sessionToLoad.id);
+                setChatMessages(msgs.length > 0 ? msgs : [
+                    { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
+                ]);
+            } finally {
+                setChatSessionsLoading(false);
+            }
+        } else {
+            setActiveSessionId(null);
+            setChatSessionsLoading(false);
         }
     };
 
@@ -1137,11 +1163,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
     const switchToSession = async (sessionId: string) => {
         setActiveSessionId(sessionId);
-
+        setChatSessionsLoading(true);
+        try {
         const msgs = await getChatMessages(sessionId);
         setChatMessages(msgs.length > 0 ? msgs : [
             { id: '1', text: "Hello! I am your MenuVision. Ask me about food, ingredients, or anything on the menu!", sender: 'bot' }
         ]);
+        } finally {
+            setChatSessionsLoading(false);
+        }
 
     };
 
@@ -1372,14 +1402,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     return (
         <div className="w-screen h-screen flex items-center justify-center">
             <div className="relative w-full h-full flex flex-col shadow-2xl bg-gray-50 overflow-hidden touch-pan-y">
-                {dishesLoading && (
-                    <div className="absolute inset-0 bg-white/80 z-[200] flex items-center justify-center">
-                        <div className="text-center">
-                            <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                            <p className="text-gray-600 font-medium">Loading...</p>
-                        </div>
-                    </div>
-                )}
                 <main ref={containerRef} className="flex-1 overflow-y-auto z-[3] relative overscroll-contain custom-scrollbar">
                     {activeTab === 'home' && (
                         <HomeTab
@@ -1418,6 +1440,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             mealLogEntries={todayLog?.entries || []}
                             nutritionGoals={nutritionGoals}
                             recommendationsLoading={recommendationsLoading}
+                            dishesLoading={dishesLoading}
                         />
                     )}
                     {activeTab === 'results' && (
@@ -1468,6 +1491,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                                 setChatInput={setChatInput}
                                 sendMessage={sendMessage}
                                 chatLoading={chatLoading}
+                                sessionsLoading={chatSessionsLoading}
                                 onDishClick={(item) => {
                                     if (item.datasetId) trackView(item.datasetId);
                                     setSelectedDish(item);
@@ -1485,6 +1509,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     {activeTab === 'profile' && (
                         <ProfileTab
                             user={auth.currentUser}
+                            userDataLoading={userDataLoading}
                             phoneNumber={phoneNumber}
                             foodProfile={foodProfile}
                             bodyMetrics={bodyMetrics}
@@ -1498,6 +1523,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     {activeTab === 'history' && (
                         <HistoryTab
                             historyItems={historyItems}
+                            userDataLoading={userDataLoading}
                             favoriteItems={favoriteItems}
                             toggleLike={toggleRecommendedLike}
                             onDeleteHistoryItem={deleteHistoryItem}
