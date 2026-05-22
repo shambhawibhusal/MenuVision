@@ -1393,7 +1393,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             const response = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: trimmed }),
+                body: JSON.stringify({
+                    message: trimmed,
+                    foodProfile: {
+                        isVegetarian: foodProfile.isVegetarian,
+                        isVegan: foodProfile.isVegan,
+                        isGlutenFree: foodProfile.isGlutenFree,
+                        allergens: foodProfile.allergens,
+                    }
+                }),
             });
             const data = await response.json();
 

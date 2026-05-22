@@ -489,6 +489,23 @@ ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fib
 
 interface ChatRequestBody {
     message: string;
+    foodProfile?: {
+        isVegetarian: boolean;
+        isVegan: boolean;
+        isGlutenFree: boolean;
+        allergens: string[];
+    };
+}
+
+function buildUserContext(profile?: ChatRequestBody["foodProfile"]): string {
+    if (!profile) return "";
+    const parts: string[] = [];
+    if (profile.isVegan) parts.push("the user is vegan (strictly no animal products, including dairy, eggs, and honey)");
+    else if (profile.isVegetarian) parts.push("the user is vegetarian (no meat, poultry, or fish)");
+    if (profile.isGlutenFree) parts.push("the user is gluten-free (no wheat, barley, rye, or gluten-containing ingredients)");
+    if (profile.allergens.length > 0) parts.push(`the user is allergic to: ${profile.allergens.join(", ")}`);
+    if (parts.length === 0) return "";
+    return `\n\nIMPORTANT USER DIETARY CONTEXT: ${parts.join("; ")}. You MUST ONLY recommend, suggest, or mention foods that are SAFE and COMPATIBLE with these dietary restrictions. If the user asks about or mentions dishes that conflict with these restrictions, politely explain why and suggest suitable alternatives.`;
 }
 
 const ChatFoodItemSchema = FoodItemSchema.extend({
@@ -563,8 +580,10 @@ function getPriceRangeForDish(dish: any): { priceMin: string; priceMax: string }
 
 app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) => {
     try {
-        const { message } = req.body;
+        const { message, foodProfile } = req.body;
         if (!message) throw new Error("Message is required");
+
+        const dietaryContext = buildUserContext(foodProfile);
 
         const keywords = extractSearchKeywords(message);
 
@@ -592,8 +611,8 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
 
             const { text } = await generateText({
                 model: model,
-                system: "You are a friendly food expert AI. Write a short, helpful, conversational response to the user's query. Naturally mention the dishes you're about to show. Keep it warm and brief.",
-                prompt: `The user asked: "${message}". We found these dishes in our collection: ${dishList}. Write a short conversational reply introducing these dishes to the user.`,
+                system: `You are a friendly food expert AI. Write a short, helpful, conversational response to the user's query. Naturally mention the dishes you're about to show. Keep it warm and brief.${dietaryContext}`,
+                prompt: `The user asked: "${message}". We found these dishes in our collection: ${dishList}. Write a short conversational reply introducing these dishes to the user.${dietaryContext}`,
             });
 
             const formattedDishes = combinedMatches.map(d => {
@@ -632,7 +651,7 @@ app.post("/chat", async (req: Request<{}, {}, ChatRequestBody>, res: Response) =
         const { object } = await generateObject({
             model: model,
             schema: ChatResponseSchema,
-            system: "You are a friendly and knowledgeable food expert AI assistant. Respond conversationally and helpfully to the user's query about food dishes, cuisines, ingredients, or nutrition. Provide interesting information, cultural context, preparation insights, or recommendations as appropriate. Then include structured dish data for the dishes you mention in your response. For each dish, provide a realistic estimated market price range using priceMin (lowest typical market price) and priceMax (highest typical market price). All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., price: 'Rs. 250', priceMin: 'Rs. 200', priceMax: 'Rs. 300'). The price field can be used for the typical/average single price. ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field. If the user's query is not about a specific food dish, you may return an empty dishes array and respond conversationally.",
+            system: `You are a friendly and knowledgeable food expert AI assistant. Respond conversationally and helpfully to the user's query about food dishes, cuisines, ingredients, or nutrition. Provide interesting information, cultural context, preparation insights, or recommendations as appropriate. Then include structured dish data for the dishes you mention in your response. For each dish, provide a realistic estimated market price range using priceMin (lowest typical market price) and priceMax (highest typical market price). All prices MUST be in Nepalese Rupees (NPR) formatted as 'Rs. XXX' (e.g., price: 'Rs. 250', priceMin: 'Rs. 200', priceMax: 'Rs. 300'). The price field can be used for the typical/average single price. ALWAYS provide values for ALL nutrition fields (protein, carbohydrates, fat, fiber, sodium) - NEVER return null for any nutrition field. If the user's query is not about a specific food dish, you may return an empty dishes array and respond conversationally.${dietaryContext}`,
             messages: [
                 { role: "user", content: [{ type: "text", text: message }] },
             ],
