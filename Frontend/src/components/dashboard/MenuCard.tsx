@@ -183,7 +183,7 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                         <div className="flex gap-2 flex-wrap items-center mt-2">
                             {onAddToMealLog && (
                                 <button
-                                    className={`text-xs px-2 py-1 rounded-full border transition-colors ${isInMealLog ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-amber-100 hover:text-amber-700 hover:border-amber-200'}`}
+                                    className={`text-xs px-3 py-1.5 rounded-md transition-all font-medium shadow-sm hover:shadow-md ${isInMealLog ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
                                     onClick={(e) => { e.stopPropagation(); onAddToMealLog(); }}
                                 >
                                     {isInMealLog ? <><Check size={12} className="inline mr-1" />Added</> : <><UtensilsCrossed size={12} className="inline mr-1" />Add</>}
@@ -191,7 +191,7 @@ const MenuCard: React.FC<MenuCardProps> = ({ item, onClick, isLiked = false, onL
                             )}
                             {onAddToOrder && (
                                 <button
-                                    className={`text-xs px-2 py-1 rounded-full border transition-colors font-medium ${isInOrder ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600 hover:border-amber-600' : 'bg-white text-amber-600 border-amber-300 hover:bg-amber-50 hover:border-amber-400'}`}
+                                    className={`text-xs px-3 py-1.5 rounded-md transition-all font-medium shadow-sm hover:shadow-md ${isInOrder ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
                                     onClick={(e) => { e.stopPropagation(); onAddToOrder(); }}
                                 >
                                     {isInOrder ? <><Check size={12} className="inline mr-1" />In Order</> : <><ShoppingCart size={12} className="inline mr-1" />Add to Order</>}
