@@ -18,6 +18,7 @@ interface DishAverageRating {
 }
 
 interface HomeTabProps {
+    userDisplayName?: string;
     searchText: string;
     setSearchText: (val: string) => void;
     setShowScanOptions: (val: boolean) => void;
@@ -73,6 +74,7 @@ const SORT_OPTIONS = [
 ];
 
 const HomeTab: React.FC<HomeTabProps> = ({
+    userDisplayName = '',
     searchText,
     setSearchText,
     setShowScanOptions,
@@ -234,7 +236,10 @@ const HomeTab: React.FC<HomeTabProps> = ({
     }, [groupedDishes, userAllergens]);
 
     return (
-        <div className="p-5 pt-8 animate-fade">
+        <div className="p-5 pt-6 animate-fade">
+            {userDisplayName && (
+                <p className="text-gray-800 text-sm font-semibold mb-5">Welcome, {userDisplayName.split(' ')[0]} 👋</p>
+            )}
             <div className="relative mb-8 group flex items-center gap-2">
                 <div className="relative flex-1" ref={searchRef}>
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-amber-500 transition-colors" size={20} />

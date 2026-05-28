@@ -24,6 +24,7 @@ interface ResultsTabProps {
     dishViewCounts?: Record<string, number>;
     orderItems?: Set<string>;
     onToggleOrder?: (item: ScannedItem) => void;
+    currentRestaurantId?: string;
 }
 
 import MenuCard from './MenuCard';
@@ -44,7 +45,8 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
     onRateRestaurant,
     dishViewCounts = {},
     orderItems = new Set(),
-    onToggleOrder
+    onToggleOrder,
+    currentRestaurantId = ''
 }) => {
     const [resolvedItems, setResolvedItems] = useState<ScannedItem[]>([]);
     const [isResolving, setIsResolving] = useState(true);
@@ -82,18 +84,25 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
         }
     };
 
+    const orderKey = (name: string) => `${currentRestaurantId}|||${name}`;
+
     const orderTotal = React.useMemo(() => {
         let total = 0;
         resolvedItems.forEach(item => {
             const itemName = item?.name || '';
-            if (orderItems.has(itemName)) {
+            if (orderItems.has(orderKey(itemName))) {
                 total += extractPriceValue(item.price || '0');
             }
         });
         return total;
-    }, [resolvedItems, orderItems]);
+    }, [resolvedItems, orderItems, currentRestaurantId]);
 
-    const orderItemsCount = orderItems.size;
+    const orderItemsCount = React.useMemo(() => {
+        const prefix = `${currentRestaurantId}|||`;
+        let count = 0;
+        orderItems.forEach(k => { if (k.startsWith(prefix)) count++; });
+        return count;
+    }, [orderItems, currentRestaurantId]);
 
     const unsafeCount = userAllergens.length > 0
         ? resolvedItems.filter(item => !checkAllergens(item, userAllergens).isSafe).length
@@ -122,7 +131,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                     const userRating = dishRatings[ratingKey]?.rating || 0;
                     const avgRating = dishAverageRatings[item?.datasetId || itemName];
                     const inMealLog = isDishInMealLog ? isDishInMealLog(itemName) : false;
-                    const inOrder = orderItems.has(itemName);
+                    const inOrder = orderItems.has(orderKey(itemName));
                     const allergyInfo = checkAllergens(item, userAllergens);
                     return (
                         <MenuCard
@@ -163,7 +172,7 @@ const ResultsTab: React.FC<ResultsTabProps> = ({
                         </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                        {resolvedItems.filter(item => orderItems.has(item?.name || '')).map((item, idx) => (
+                        {resolvedItems.filter(item => orderItems.has(orderKey(item?.name || ''))).map((item, idx) => (
                             <span key={idx} className="inline-flex items-center gap-1 text-xs bg-white border border-amber-200 text-amber-700 px-2.5 py-1 rounded-full shadow-sm">
                                 {item.name}
                                 <button

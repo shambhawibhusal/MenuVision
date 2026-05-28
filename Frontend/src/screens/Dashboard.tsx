@@ -161,6 +161,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     }, [allDishes, favoriteItems, historyItems]);
     const { viewCountMap, trackView } = useDishPopularity(dishContexts);
 
+    const currentRestaurantId = useMemo(() => {
+        const place = selectedHistoryRestaurant?.place || restaurantName || 'Scanned Menu';
+        const loc = selectedHistoryRestaurant?.location || restaurantLocation || '';
+        return `${place}_${loc}`;
+    }, [selectedHistoryRestaurant, restaurantName, restaurantLocation]);
+
     React.useEffect(() => {
         const fetchUserData = async () => {
             if (!auth.currentUser) return;
@@ -214,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                     setUnlikedDishIds(data.unliked || []);
                     setFoodProfile(data.foodProfile || DEFAULT_FOOD_PROFILE);
                     const rawOrders: OrderItem[] = data.orders || [];
-                    const orderNames = new Set(rawOrders.map((o: OrderItem) => o.name));
+                    const orderNames = new Set(rawOrders.map((o: OrderItem) => `${o.restaurantId}|||${o.name}`));
                     setActiveOrderItems(orderNames);
 
                     const updates: any = {};
@@ -396,11 +402,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     const toggleOrderItem = async (item: ScannedItem) => {
         if (!auth.currentUser) return;
 
-        const isInOrder = activeOrderItems.has(item.name);
         const userDocRef = doc(db, 'users', auth.currentUser.uid);
         const place = item.place || 'Scanned Menu';
         const loc = item.location || '';
         const restaurantId = `${place}_${loc}`;
+        const orderKey = `${restaurantId}|||${item.name}`;
+        const isInOrder = activeOrderItems.has(orderKey);
 
         const orderItem: OrderItem = {
             datasetId: item.datasetId || '',
@@ -413,7 +420,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             if (isInOrder) {
                 setActiveOrderItems(prev => {
                     const next = new Set(prev);
-                    next.delete(item.name);
+                    next.delete(orderKey);
                     return next;
                 });
                 await updateDoc(userDocRef, {
@@ -422,7 +429,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             } else {
                 setActiveOrderItems(prev => {
                     const next = new Set(prev);
-                    next.add(item.name);
+                    next.add(orderKey);
                     return next;
                 });
                 await updateDoc(userDocRef, {
@@ -1199,6 +1206,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             }, { merge: true });
                         }
                     });
+
                 }
 
                 setScannedItems(items);
@@ -1575,6 +1583,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 <main ref={containerRef} className="flex-1 overflow-y-auto z-[3] relative overscroll-contain custom-scrollbar">
                     {activeTab === 'home' && (
                         <HomeTab
+                            userDisplayName={auth.currentUser?.displayName || ''}
                             searchText={searchText}
                             setSearchText={setSearchText}
                             setShowScanOptions={setShowScanOptions}
@@ -1644,6 +1653,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                             dishViewCounts={viewCountMap}
                             orderItems={activeOrderItems}
                             onToggleOrder={toggleOrderItem}
+                            currentRestaurantId={currentRestaurantId}
                         />
                     )}
                     {activeTab === 'chat' && (

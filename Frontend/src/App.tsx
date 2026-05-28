@@ -6,11 +6,14 @@ import SignupScreen from './screens/SignupScreen';
 import VerifyEmailScreen from './screens/VerifyEmailScreen';
 import Dashboard from './screens/Dashboard';
 import OnboardingScreen from './screens/OnboardingScreen';
-import { User } from 'firebase/auth';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
+import { User, applyActionCode } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { isGoogleAuthProcessing } from './utils/googleAuthGuard';
+import { notifyVerified, onAuthBroadcast, AUTH_EVENTS } from './utils/broadcast';
 
-type Screen = 'splash' | 'login' | 'signup' | 'verifyEmail' | 'onboarding' | 'dashboard';
+type Screen = 'splash' | 'login' | 'signup' | 'verifyEmail' | 'onboarding' | 'dashboard' | 'resetPassword';
 
 export default function App() {
     const [user, setUser] = useState<User | null>(null);
@@ -22,6 +25,7 @@ export default function App() {
     const [pendingOnboardingUser, setPendingOnboardingUser] = useState<User | null>(null);
     const [pendingVerifyUser, setPendingVerifyUser] = useState<User | null>(null);
     const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+    const [resetOobCode, setResetOobCode] = useState<string | null>(null);
 
     const updateScreen = (screen: Screen) => {
         setCurrentScreen(screen);
@@ -47,7 +51,7 @@ export default function App() {
         const unsubscribe = auth.onAuthStateChanged(async (currentUser: User | null) => {
             setUser(currentUser);
 
-            if (currentUser) {
+            if (currentUser && !isGoogleAuthProcessing()) {
                 if (!currentUser.emailVerified) {
                     setPendingVerifyUser(currentUser);
                     updateScreen('verifyEmail');
@@ -86,11 +90,53 @@ export default function App() {
         return () => unsubscribe();
     }, [isLoggingIn]);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const oobCode = params.get('oobCode');
+        const mode = params.get('mode');
+        if (oobCode && mode === 'resetPassword') {
+            setResetOobCode(oobCode);
+            updateScreen('resetPassword');
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+        if (oobCode && mode === 'verifyEmail') {
+            applyActionCode(auth, oobCode)
+                .then(async () => {
+                    if (auth.currentUser) {
+                        await auth.currentUser.reload();
+                    }
+                    notifyVerified();
+                    window.close();
+                })
+                .catch(console.error)
+                .finally(() => {
+                    window.history.replaceState({}, '', window.location.pathname);
+                });
+        }
+    }, []);
+
+    useEffect(() => {
+        return onAuthBroadcast((event) => {
+            if (event === AUTH_EVENTS.VERIFIED && auth.currentUser) {
+                auth.currentUser.reload();
+            }
+        });
+    }, []);
+
     if (loading) return <div>Loading...</div>;
 
     return (
         <>
             {currentScreen === 'splash' && <SplashScreen onGetStarted={() => updateScreen('login')} />}
+            {currentScreen === 'resetPassword' && resetOobCode && (
+                <ResetPasswordScreen
+                    oobCode={resetOobCode}
+                    onBackToLogin={() => {
+                        setResetOobCode(null);
+                        updateScreen('login');
+                    }}
+                />
+            )}
             {currentScreen === 'login' && (
                 <LoginScreen
                     onBack={() => updateScreen('splash')}

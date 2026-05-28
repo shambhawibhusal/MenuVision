@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, getAdditionalUserInfo, sendPasswordResetEmail } from 'firebase/auth';
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, getAdditionalUserInfo, sendPasswordResetEmail, signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import foodBackground from '../assets/food.png';
 import BackButton from '../components/BackButton';
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { setGoogleAuthProcessing } from '../utils/googleAuthGuard';
 
 import { User } from 'firebase/auth';
 
@@ -53,6 +54,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
 
     const handleGoogleLogin = async () => {
         setError('');
+        setGoogleAuthProcessing(true);
         try {
             const provider = new GoogleAuthProvider();
             const userCredential = await signInWithPopup(auth, provider);
@@ -62,10 +64,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
                 setError('No account found.');
                 return;
             }
+
+            if (userCredential.user.providerData.some(p => p.providerId === 'password')) {
+                await signOut(auth);
+                setError('This account was registered with email/password. Please login with your credentials.');
+                return;
+            }
+
             onLoginSuccess(userCredential.user);
         } catch (err: any) {
             console.error(err);
-            setError('Google login failed.');
+            if (err.code === 'auth/account-exists-with-different-credential') {
+                setError('This email is already registered with email/password.');
+            } else {
+                setError('Google login failed.');
+            }
+        } finally {
+            setGoogleAuthProcessing(false);
         }
     };
 
@@ -78,7 +93,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
         setResetLoading(true);
         setResetError('');
         try {
-            await sendPasswordResetEmail(auth, targetEmail);
+            await sendPasswordResetEmail(auth, targetEmail, {
+                url: window.location.origin,
+                handleCodeInApp: true,
+            });
             setResetSent(true);
         } catch (err: any) {
             if (err.code === 'auth/user-not-found') {
@@ -106,7 +124,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
                 <BackButton onClick={onBack} />
                 <div className="relative w-full h-full z-[3] flex flex-col items-center justify-center p-5">
                     {!showForgotPassword ? (
-                        <Card className="w-full max-w-[350px] shadow-2xl border-none bg-white/95 backdrop-blur-sm">
+                        <Card className="w-full max-w-[350px] md:max-w-[420px] shadow-2xl border-none bg-white/95 backdrop-blur-sm">
                             <CardHeader className="flex flex-col items-center pt-8">
                                 <CardTitle className="text-3xl font-bold tracking-tight text-black">Welcome Back</CardTitle>
                             </CardHeader>
@@ -172,15 +190,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
                             </CardFooter>
                         </Card>
                     ) : (
-                        <Card className="w-full max-w-[350px] shadow-2xl border-none bg-white/95 backdrop-blur-sm">
-                            <CardHeader className="flex flex-col items-center pt-8">
-                                <CardTitle className="text-2xl font-bold tracking-tight text-black">Reset Password</CardTitle>
+                        <Card className="w-full max-w-[350px] md:max-w-[420px] shadow-2xl border-none bg-white/95 backdrop-blur-sm">
+                            <CardHeader className="flex flex-col items-center pt-8 md:pt-10">
+                                <CardTitle className="text-2xl md:text-3xl font-bold tracking-tight text-black">Reset Password</CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-4 px-6">
+                            <CardContent className="space-y-4 md:space-y-5 px-6">
                                 {resetSent ? (
                                     <div className="text-center space-y-3">
-                                        <div className="text-green-600 text-sm font-medium">Reset link sent!</div>
-                                        <p className="text-gray-500 text-sm">Check your inbox for a password reset link.</p>
+                                        <div className="text-green-600 text-sm md:text-base font-medium">Reset link sent!</div>
+                                        <p className="text-gray-500 text-sm md:text-base">Check your inbox for a password reset link.</p>
                                     </div>
                                 ) : (
                                     <>
@@ -200,7 +218,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
                                     </>
                                 )}
                             </CardContent>
-                            <CardFooter className="flex flex-col gap-3 pb-8 px-6">
+                            <CardFooter className="flex flex-col gap-3 pb-8 md:pb-10 px-6">
                                 {!resetSent ? (
                                     <Button
                                         onClick={handleForgotPassword}
