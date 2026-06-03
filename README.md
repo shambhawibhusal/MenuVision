@@ -39,7 +39,7 @@ After the script finishes, edit your `.env` files:
 | `GOOGLE_GENERATIVE_AI_API_KEY` | https://aistudio.google.com/apikey |
 | `OPENAI_API_KEY` | https://platform.openai.com/api-keys |
 
-**Frontend/.env.local:**
+**Frontend/.env.local** (copy from `Frontend/.env.example`):
 | Variable | Get it from |
 |----------|-------------|
 | `VITE_GOOGLE_MAPS_API_KEY` | Google Cloud Console → Maps JavaScript API |
@@ -73,7 +73,7 @@ Open **http://localhost:5173** → Sign Up → Scan a menu image.
 
 ```bash
 cp Backend/.env.example Backend/.env
-cp Frontend/.env.local.example Frontend/.env.local
+cp Frontend/.env.example Frontend/.env.local
 ```
 
 Edit both files with your API keys (see table above).

@@ -303,9 +303,9 @@ async function step08_envFiles() {
   // Frontend .env.local
   const feEnvPath = path.join(ROOT, "Frontend", ".env.local");
   if (!fs.existsSync(feEnvPath)) {
-    const feExample = fs.readFileSync(path.join(ROOT, "Frontend", ".env.local.example"), "utf8");
+    const feExample = fs.readFileSync(path.join(ROOT, "Frontend", ".env.example"), "utf8");
     fs.writeFileSync(feEnvPath, feExample);
-    ok("  Frontend/.env.local created from .env.local.example");
+    ok("  Frontend/.env.local created from .env.example");
     info("  → Edit Frontend/.env.local with:");
     info("    VITE_GOOGLE_MAPS_API_KEY  –  Google Cloud Console → Maps JavaScript API");
   } else {
