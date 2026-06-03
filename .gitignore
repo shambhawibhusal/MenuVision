@@ -10,7 +10,14 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+build
 *.local
+
+# Firebase
+.firebase/
+
+# TypeScript
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*

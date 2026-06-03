@@ -32,6 +32,11 @@ export default function App() {
         sessionStorage.setItem('currentScreen', screen);
     };
 
+    const goToDashboard = () => {
+        sessionStorage.setItem('activeTab', 'home');
+        updateScreen('dashboard');
+    };
+
     const checkOnboardingStatus = async (currentUser: User) => {
         try {
             const userDocRef = doc(db, 'users', currentUser.uid);
@@ -69,7 +74,7 @@ export default function App() {
                         if (shouldOnboard) {
                             updateScreen('onboarding');
                         } else {
-                            updateScreen('dashboard');
+                            goToDashboard();
                         }
                         setIsLoggingIn(false);
                     } else {
@@ -187,7 +192,7 @@ export default function App() {
                     user={pendingOnboardingUser || user!}
                     onComplete={() => {
                         setPendingOnboardingUser(null);
-                        updateScreen('dashboard');
+                        goToDashboard();
                     }}
                 />
             )}
