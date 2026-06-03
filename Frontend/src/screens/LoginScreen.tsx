@@ -61,7 +61,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onSignupClick, onLogi
             const additionalInfo = getAdditionalUserInfo(userCredential);
             if (additionalInfo?.isNewUser) {
                 await userCredential.user.delete();
-                setError('No account found.');
+                setError('No account found. Please Sign Up first.');
                 return;
             }
 

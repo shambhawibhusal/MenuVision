@@ -4,8 +4,7 @@ import {
     updateProfile,
     sendEmailVerification,
     GoogleAuthProvider,
-    signInWithPopup,
-    getAdditionalUserInfo
+    signInWithPopup
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -51,14 +50,6 @@ const SignupScreen: React.FC<SignupScreenProps> = ({ onBack, onSignupSuccess, on
             const provider = new GoogleAuthProvider();
             const result = await signInWithPopup(auth, provider);
             const user = result.user;
-
-            const additionalInfo = getAdditionalUserInfo(result);
-            if (additionalInfo?.isNewUser) {
-                await user.delete();
-                setError('No account found.');
-                setLoading(false);
-                return;
-            }
 
             const userDocRef = doc(db, "users", user.uid);
             await setDoc(userDocRef, {

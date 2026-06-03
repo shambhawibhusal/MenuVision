@@ -6,13 +6,13 @@ import { getFunctions } from 'firebase/functions';
 import { Analytics, getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyDRDg8Yy03lP9YI7eey9F-3-H49kiEjLTs",
-    authDomain: "menuvision-9acfc.firebaseapp.com",
-    projectId: "menuvision-9acfc",
-    storageBucket: "menuvision-9acfc.appspot.com", // fixed here
-    messagingSenderId: "299254178564",
-    appId: "1:299254178564:web:06cd6e7e38a1c99b856651",
-    measurementId: "G-TDBVV2DFVY"
+    apiKey: "AIzaSyAO8weBesmOc9jd-e47LNxW9EZI3gLV9l8",
+    authDomain: "project-mpxuqomb.firebaseapp.com",
+    projectId: "project-mpxuqomb",
+    storageBucket: "project-mpxuqomb.firebasestorage.app",
+    messagingSenderId: "105533544715",
+    appId: "1:105533544715:web:beba33cfd3d69e38be2a0e",
+    measurementId: ""
 };
 
 const app = initializeApp(firebaseConfig);
