@@ -20,14 +20,30 @@ npm install --prefix Backend
 npm install --prefix Frontend
 firebase login                              # sign in with your Google account
 node setup.cjs                              # automated Firebase project setup
+firebase deploy --only firestore:indexes    # deploy indexes (one-time)
 ```
 
 The setup script will:
 - Create a Firebase project
-- Enable Email/Password + Google authentication
-- Create a Firestore database
-- Generate a service account key
-- Update all config files automatically
+- Enable required APIs (Identity Platform, Firestore, IAM)
+- Create a Web app and update `Frontend/src/firebase.ts`
+- Generate a service account key → `Backend/serviceAccountKey.json`
+- Create `.env` files from examples
+- Update `.firebaserc`
+
+> **Note:** Authentication providers (Email/Password, Google) and the Firestore database
+> require a linked billing account to be provisioned via API. If you see warnings like
+> `status 404` or `status 400` during setup, complete these steps manually:
+
+### 1.5. Manual Follow-up (if auth/firestore warnings appeared)
+
+After running `node setup.cjs`, open your project in the Firebase console:
+
+1. **Enable Authentication providers**  
+   Go to https://console.firebase.google.com → your project → **Authentication** → **Sign-in method** → **Add new provider** → Enable **Email/Password** and **Google**
+
+2. **Create Firestore database**  
+   Go to **Firestore Database** → **Create database** → choose a location → **Start in test mode**
 
 ### 2. Add API Keys
 
@@ -99,6 +115,7 @@ npm run dev --prefix Frontend
 
 | Problem | Solution |
 |---------|----------|
+| Auth/Firestore warnings (404/400) during setup | Firebase now requires a billing account for API-based provisioning. As a workaround, enable them manually in the Firebase console (see **Step 1.5** above) — no billing needed for the console UI. |
 | Setup script says "billing" | Firebase Spark (free) plan requires a linked billing account. Create one at https://console.cloud.google.com/billing → then re-run `node setup.cjs` |
 | `auth/configuration-not-found` | Firebase config in `Frontend/src/firebase.ts` is wrong. Re-run setup or update manually. |
 | Google popup closes immediately | Google provider not enabled in Firebase Auth, or frontend needs restart after setup. |
